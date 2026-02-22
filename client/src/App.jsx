@@ -66,6 +66,11 @@ import {
 } from './api.js'
 
 const icons = {
+  dashboard: (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4 4h7v7H4V4Zm9 0h7v4h-7V4ZM4 13h4v7H4v-7Zm6 0h10v7H10v-7Zm5-4h5v2h-5V9Zm-4 0h2v2h-2V9Z" />
+    </svg>
+  ),
   feed: (
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path d="M5 4h14a2 2 0 0 1 2 2v2H3V6a2 2 0 0 1 2-2Zm-2 8h18v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-6Zm4 2h6v2H7v-2Z" />
@@ -2397,6 +2402,266 @@ export default function App() {
       : callState.status === 'in-call'
         ? `Звонок ${formatDuration(callDuration)}`
         : ''
+  const dashboardTopConversations = useMemo(() => {
+    return [...conversations]
+      .sort((a, b) => {
+        const aUnread = Math.max(0, Number(a.unreadCount || 0))
+        const bUnread = Math.max(0, Number(b.unreadCount || 0))
+        if (bUnread !== aUnread) return bUnread - aUnread
+        const aTime = Date.parse(a.lastAt || '') || 0
+        const bTime = Date.parse(b.lastAt || '') || 0
+        return bTime - aTime
+      })
+      .slice(0, 7)
+      .map((conv) => {
+        const draftText = String(draftsByConversation[conv.id] || '').trim()
+        const title = getConversationDisplayName(conv, chatAliasByConversation)
+        return {
+          ...conv,
+          title,
+          unreadCount: Math.max(0, Number(conv.unreadCount || 0)),
+          draftText,
+          hasDraft: draftText.length > 0,
+          isFavorite: favoriteConversationSet.has(conv.id),
+          online: !conv.isGroup && conv.other && onlineUsers.includes(conv.other.id)
+        }
+      })
+  }, [conversations, draftsByConversation, chatAliasByConversation, favoriteConversationSet, onlineUsers])
+  const dashboardDraftQueue = useMemo(() => {
+    return dashboardTopConversations
+      .filter((item) => item.hasDraft)
+      .sort((a, b) => {
+        if (b.unreadCount !== a.unreadCount) return b.unreadCount - a.unreadCount
+        return (Date.parse(b.lastAt || '') || 0) - (Date.parse(a.lastAt || '') || 0)
+      })
+      .slice(0, 6)
+  }, [dashboardTopConversations])
+  const dashboardWorkspaceScore = useMemo(() => {
+    const profileScore = Number(profileEditorScore || 0)
+    const chatResponsiveness = conversations.length === 0
+      ? 100
+      : Math.max(0, 100 - Math.min(80, unreadMessagesCount * 4))
+    const feedActivity = Math.min(100, (feedDigest.freshCount * 12) + Math.min(40, feedMetrics.engagement))
+    const infraScore = (
+      (socketConnection === 'connected' ? 40 : socketConnection === 'connecting' ? 24 : 10) +
+      (pushState.enabled ? 30 : pushState.supported ? 18 : 8) +
+      (callState.status === 'idle' ? 20 : 14) +
+      (health && health.ok ? 10 : 5)
+    )
+    return Math.round((profileScore * 0.35) + (chatResponsiveness * 0.25) + (feedActivity * 0.2) + (infraScore * 0.2))
+  }, [
+    profileEditorScore,
+    conversations.length,
+    unreadMessagesCount,
+    feedDigest.freshCount,
+    feedMetrics.engagement,
+    socketConnection,
+    pushState.enabled,
+    pushState.supported,
+    callState.status,
+    health && health.ok
+  ])
+  const dashboardQuickActions = useMemo(() => {
+    return [
+      {
+        id: 'unread-chats',
+        title: 'Непрочитанные чаты',
+        subtitle: unreadConversationCount > 0 ? `${unreadConversationCount} диалогов` : 'Чисто',
+        icon: '💬',
+        accent: unreadConversationCount > 0 ? 'warn' : 'ok'
+      },
+      {
+        id: 'hot-feed',
+        title: 'Горячая лента',
+        subtitle: hotFeedPosts[0] ? `${hotFeedPosts.length} постов в радаре` : 'Пока тихо',
+        icon: '🔥',
+        accent: hotFeedPosts[0] ? 'hot' : 'neutral'
+      },
+      {
+        id: 'profile-lab',
+        title: 'Прокачать профиль',
+        subtitle: `${profileEditorScore}% готовности`,
+        icon: '🛠️',
+        accent: profileEditorScore >= 80 ? 'ok' : 'neutral'
+      },
+      {
+        id: 'resume-chat',
+        title: 'Продолжить чат',
+        subtitle: activeConversation ? getConversationDisplayName(activeConversation, chatAliasByConversation) : 'Выбери диалог',
+        icon: '🧭',
+        accent: activeConversation ? 'accent' : 'neutral'
+      }
+    ]
+  }, [unreadConversationCount, hotFeedPosts, profileEditorScore, activeConversation, chatAliasByConversation])
+  const dashboardSystemAlerts = useMemo(() => {
+    const items = []
+    if (socketConnection !== 'connected') {
+      items.push({
+        id: 'socket',
+        level: socketConnection === 'connecting' ? 'warn' : 'danger',
+        title: 'Realtime-соединение',
+        text: socketConnection === 'connecting' ? 'Подключение к сокету...' : 'Сокет офлайн. Чат может не обновляться мгновенно.'
+      })
+    }
+    if (pushState.error) {
+      items.push({
+        id: 'push-error',
+        level: 'warn',
+        title: 'Push-уведомления',
+        text: pushState.error
+      })
+    } else if (webPushFeatureEnabled && pushState.supported && !pushState.enabled) {
+      items.push({
+        id: 'push-off',
+        level: 'neutral',
+        title: 'Push-уведомления',
+        text: 'Отключены. Можно включить в верхней панели.'
+      })
+    }
+    if (callState.status !== 'idle') {
+      items.push({
+        id: 'call',
+        level: 'accent',
+        title: 'Звонок',
+        text: callStatusText || 'Активен звонок'
+      })
+    }
+    if (blockedUsers.length > 0) {
+      items.push({
+        id: 'blocked',
+        level: 'neutral',
+        title: 'Блокировки',
+        text: `Заблокировано пользователей: ${blockedUsers.length}`
+      })
+    }
+    if (unreadMessagesCount > 0) {
+      items.push({
+        id: 'unread',
+        level: unreadMessagesCount > 8 ? 'warn' : 'neutral',
+        title: 'Непрочитанные сообщения',
+        text: `${unreadMessagesCount} сообщений в ${unreadConversationCount} чатах`
+      })
+    }
+    return items.slice(0, 6)
+  }, [
+    socketConnection,
+    pushState.error,
+    pushState.supported,
+    pushState.enabled,
+    callState.status,
+    callStatusText,
+    blockedUsers.length,
+    unreadMessagesCount,
+    unreadConversationCount
+  ])
+  const dashboardFocusQueue = useMemo(() => {
+    const queue = []
+    if (dashboardDraftQueue.length > 0) {
+      queue.push({
+        id: 'drafts',
+        title: 'Завершить черновики',
+        text: `${dashboardDraftQueue.length} чатов с набранным текстом`,
+        action: 'drafts'
+      })
+    }
+    if (unreadConversationCount > 0) {
+      queue.push({
+        id: 'replies',
+        title: 'Ответить в чатах',
+        text: `${unreadConversationCount} диалогов требуют внимания`,
+        action: 'unread'
+      })
+    }
+    if (feedDigest.freshCount > 0) {
+      queue.push({
+        id: 'feed-fresh',
+        title: 'Проверить свежую ленту',
+        text: `${feedDigest.freshCount} свежих постов в выборке`,
+        action: 'feed-hot'
+      })
+    }
+    if (profileEditorScore < 100) {
+      const nextChecklistItem = profileEditorChecklist.find((item) => !item.done)
+      if (nextChecklistItem) {
+        queue.push({
+          id: 'profile-next',
+          title: 'Прокачать профиль',
+          text: nextChecklistItem.label,
+          action: 'profile'
+        })
+      }
+    }
+    if (trendingTags[0]) {
+      queue.push({
+        id: 'trend',
+        title: 'Поймать тренд',
+        text: `Открыть ${trendingTags[0].tag} (${trendingTags[0].count})`,
+        action: 'trend'
+      })
+    }
+    return queue.slice(0, 6)
+  }, [
+    dashboardDraftQueue,
+    unreadConversationCount,
+    feedDigest.freshCount,
+    profileEditorScore,
+    profileEditorChecklist,
+    trendingTags
+  ])
+  const dashboardTimelineSnapshot = useMemo(() => {
+    const latestConversation = [...conversations]
+      .sort((a, b) => (Date.parse(b.lastAt || '') || 0) - (Date.parse(a.lastAt || '') || 0))[0] || null
+    const latestPost = [...posts]
+      .sort((a, b) => (Date.parse(b.createdAt || '') || 0) - (Date.parse(a.createdAt || '') || 0))[0] || null
+    const latestChatMessage = messages.length > 0 ? messages[messages.length - 1] : null
+    const entries = []
+    if (latestConversation) {
+      entries.push({
+        id: 'latest-conv',
+        kind: 'chat',
+        title: `Чат: ${getConversationDisplayName(latestConversation, chatAliasByConversation)}`,
+        subtitle: latestConversation.lastMessage || 'Последнее сообщение',
+        at: latestConversation.lastAt || null,
+        targetId: latestConversation.id
+      })
+    }
+    if (latestPost) {
+      entries.push({
+        id: 'latest-post',
+        kind: 'feed',
+        title: `Лента: ${latestPost.author?.displayName || latestPost.author?.username || 'Автор'}`,
+        subtitle: String(latestPost.body || '').trim() || (latestPost.imageUrl ? 'Пост с изображением' : 'Пост'),
+        at: latestPost.createdAt || null,
+        postId: latestPost.id
+      })
+    }
+    if (activeConversation && latestChatMessage) {
+      entries.push({
+        id: 'latest-active-chat',
+        kind: 'active-chat',
+        title: `Активный чат: ${getConversationDisplayName(activeConversation, chatAliasByConversation)}`,
+        subtitle: getMessagePreviewLabel(latestChatMessage, 'Сообщение'),
+        at: latestChatMessage.createdAt || null,
+        messageId: latestChatMessage.id
+      })
+    }
+    return entries
+      .sort((a, b) => (Date.parse(b.at || '') || 0) - (Date.parse(a.at || '') || 0))
+      .slice(0, 6)
+  }, [conversations, posts, messages, activeConversation, chatAliasByConversation])
+  const dashboardThemeMood = useMemo(() => {
+    if (feedDigest.momentum >= 80) return 'surge'
+    if (unreadMessagesCount >= 8) return 'attention'
+    if (dashboardWorkspaceScore >= 75) return 'steady'
+    return 'focus'
+  }, [feedDigest.momentum, unreadMessagesCount, dashboardWorkspaceScore])
+  const dashboardNow = useMemo(() => {
+    const now = new Date()
+    return {
+      date: now.toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' }),
+      time: now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
+    }
+  }, [messages.length, posts.length, conversations.length, unreadMessagesCount, socketConnection, view])
   const scrollChatToBottom = (behavior = 'auto') => {
     const container = chatMessagesRef.current
     if (!container) return
@@ -3344,7 +3609,7 @@ export default function App() {
   const readStoredView = (isAdmin) => {
     try {
       const stored = localStorage.getItem('ktk_view')
-      const allowed = ['feed', 'chats', 'profile']
+      const allowed = ['dashboard', 'feed', 'chats', 'profile']
       if (isAdmin) allowed.push('admin')
       return stored && allowed.includes(stored) ? stored : 'feed'
     } catch (err) {
@@ -3434,7 +3699,7 @@ export default function App() {
 
   useEffect(() => {
     if (!user) return
-    const allowed = ['feed', 'chats', 'profile']
+    const allowed = ['dashboard', 'feed', 'chats', 'profile']
     if (user.isAdmin) allowed.push('admin')
     if (allowed.includes(view)) {
       try {
@@ -5464,6 +5729,68 @@ export default function App() {
     setFeedAuthorFilter((prev) => (prev === authorId ? '' : authorId))
   }
 
+  const openConversationFromDashboard = (conversation, { pane = 'chat' } = {}) => {
+    if (!conversation || !conversation.id) return
+    setActiveConversation(conversation)
+    setView('chats')
+    setChatMobilePane(pane)
+  }
+
+  const openFeedFocus = ({
+    filter = FEED_FILTERS.all,
+    tag = '',
+    authorId = '',
+    query = '',
+    sortMode = null,
+    timeWindow = null
+  } = {}) => {
+    setView('feed')
+    setFeedFilter(filter)
+    setActiveFeedTag(tag || '')
+    setFeedAuthorFilter(authorId || '')
+    setFeedQuery(query || '')
+    if (sortMode || timeWindow) {
+      updateFeedExplorer({
+        ...(sortMode ? { sortMode } : {}),
+        ...(timeWindow ? { timeWindow } : {})
+      })
+    }
+  }
+
+  const runDashboardFocusAction = (actionId) => {
+    if (actionId === 'drafts') {
+      setView('chats')
+      setChatListFilter(CHAT_LIST_FILTERS.all)
+      setChatMobilePane('list')
+      return
+    }
+    if (actionId === 'unread') {
+      setView('chats')
+      setChatListFilter(CHAT_LIST_FILTERS.unread)
+      setChatMobilePane('list')
+      return
+    }
+    if (actionId === 'feed-hot') {
+      openFeedFocus({
+        filter: FEED_FILTERS.popular,
+        sortMode: FEED_SORT_MODES.engagement,
+        timeWindow: FEED_TIME_WINDOWS.week
+      })
+      return
+    }
+    if (actionId === 'profile') {
+      setView('profile')
+      return
+    }
+    if (actionId === 'trend' && trendingTags[0]) {
+      openFeedFocus({
+        filter: FEED_FILTERS.all,
+        tag: trendingTags[0].tag,
+        sortMode: FEED_SORT_MODES.smart
+      })
+    }
+  }
+
   const applyFeedQuickPreset = (preset) => {
     if (!preset || typeof preset !== 'object') return
     if (preset.action === 'tag') {
@@ -6595,6 +6922,14 @@ export default function App() {
           <div className="icon-rail">
             <button
               type="button"
+              className={view === 'dashboard' ? 'active' : ''}
+              onClick={() => setView('dashboard')}
+              title="Dashboard"
+            >
+              {icons.dashboard}
+            </button>
+            <button
+              type="button"
               className={view === 'feed' ? 'active' : ''}
               onClick={() => setView('feed')}
               title="Лента"
@@ -6764,6 +7099,526 @@ export default function App() {
             </label>
             <button className="primary" type="submit" disabled={loading}>Зарегистрироваться</button>
           </form>
+        )}
+
+        {view === 'dashboard' && user && (
+          <div className={`dashboard-layout mood-${dashboardThemeMood}`.trim()}>
+            <section className="dashboard-hero">
+              <div className="dashboard-hero-main">
+                <div className="dashboard-kicker">Workspace Control Center</div>
+                <div className="dashboard-hero-title-row">
+                  <div>
+                    <h2>Dashboard</h2>
+                    <p>
+                      {dashboardNow.date} • {dashboardNow.time}
+                    </p>
+                  </div>
+                  <div className={`dashboard-socket-pill state-${socketConnection}`.trim()}>
+                    <span className="dot"></span>
+                    {socketConnection === 'connected' ? 'Realtime online' : socketConnection === 'connecting' ? 'Connecting...' : 'Offline'}
+                  </div>
+                </div>
+
+                <div className="dashboard-hero-summary">
+                  <article>
+                    <span>Чаты</span>
+                    <strong>{conversations.length}</strong>
+                    <small>{unreadConversationCount} с непрочитанным</small>
+                  </article>
+                  <article>
+                    <span>Лента</span>
+                    <strong>{feedMetrics.total}</strong>
+                    <small>{feedDigest.freshCount} свежих / {feedDigest.momentum} momentum</small>
+                  </article>
+                  <article>
+                    <span>Профиль</span>
+                    <strong>{profileEditorScore}%</strong>
+                    <small>power {profilePowerScore} • achievements {profileAchievementsProgress}%</small>
+                  </article>
+                  <article>
+                    <span>Система</span>
+                    <strong>{onlineUsers.length}</strong>
+                    <small>онлайн пользователей • push {pushState.enabled ? 'on' : 'off'}</small>
+                  </article>
+                </div>
+
+                <div className="dashboard-quick-actions">
+                  {dashboardQuickActions.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      className={`dashboard-quick-action accent-${item.accent}`.trim()}
+                      onClick={() => {
+                        if (item.id === 'unread-chats') {
+                          runDashboardFocusAction('unread')
+                          return
+                        }
+                        if (item.id === 'hot-feed') {
+                          runDashboardFocusAction('feed-hot')
+                          return
+                        }
+                        if (item.id === 'profile-lab') {
+                          runDashboardFocusAction('profile')
+                          return
+                        }
+                        if (item.id === 'resume-chat' && activeConversation) {
+                          openConversationFromDashboard(activeConversation)
+                        }
+                      }}
+                    >
+                      <span className="dashboard-quick-icon">{item.icon}</span>
+                      <div>
+                        <strong>{item.title}</strong>
+                        <small>{item.subtitle}</small>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <aside className="dashboard-score-card">
+                <div className="dashboard-score-head">
+                  <span>Workspace Score</span>
+                  <strong>{dashboardWorkspaceScore}</strong>
+                </div>
+                <div className="dashboard-score-bar" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={dashboardWorkspaceScore}>
+                  <span style={{ width: `${dashboardWorkspaceScore}%` }}></span>
+                </div>
+                <div className="dashboard-score-grid">
+                  <div>
+                    <span>Realtime</span>
+                    <strong>{socketConnection === 'connected' ? '100%' : socketConnection === 'connecting' ? '60%' : '20%'}</strong>
+                  </div>
+                  <div>
+                    <span>Push</span>
+                    <strong>{pushState.enabled ? 'ON' : pushState.supported ? 'OFF' : 'N/A'}</strong>
+                  </div>
+                  <div>
+                    <span>Drafts</span>
+                    <strong>{dashboardDraftQueue.length}</strong>
+                  </div>
+                  <div>
+                    <span>Health</span>
+                    <strong>{health && health.ok ? 'OK' : '...'}</strong>
+                  </div>
+                </div>
+                {dashboardSystemAlerts.length > 0 && (
+                  <div className="dashboard-score-alerts">
+                    {dashboardSystemAlerts.slice(0, 2).map((alert) => (
+                      <div key={`dash-hero-alert-${alert.id}`} className={`dashboard-alert-chip level-${alert.level}`.trim()}>
+                        <strong>{alert.title}</strong>
+                        <span>{alert.text}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </aside>
+            </section>
+
+            <div className="dashboard-grid">
+              <article className="dashboard-card dashboard-card-chat">
+                <div className="dashboard-card-head">
+                  <div>
+                    <strong>Chat Radar</strong>
+                    <span>приоритеты по диалогам, черновикам и unread</span>
+                  </div>
+                  <button type="button" className="ghost" onClick={() => setView('chats')}>Открыть чаты</button>
+                </div>
+
+                <div className="dashboard-card-split">
+                  <div className="dashboard-list-block">
+                    <div className="dashboard-list-head">
+                      <strong>Приоритетные диалоги</strong>
+                      <span>{dashboardTopConversations.length}</span>
+                    </div>
+                    {dashboardTopConversations.length === 0 ? (
+                      <div className="empty small">Диалогов пока нет</div>
+                    ) : (
+                      <div className="dashboard-chat-list">
+                        {dashboardTopConversations.map((conv) => (
+                          <button
+                            key={`dash-conv-${conv.id}`}
+                            type="button"
+                            className={`dashboard-chat-item ${conv.unreadCount > 0 ? 'unread' : ''} ${conv.isFavorite ? 'favorite' : ''}`.trim()}
+                            onClick={() => openConversationFromDashboard(conv)}
+                          >
+                            <div className="dashboard-chat-item-main">
+                              <div className="dashboard-chat-item-title">
+                                <strong>{conv.title}</strong>
+                                <div className="dashboard-chat-item-flags">
+                                  {conv.online && <span className="status online">online</span>}
+                                  {conv.hasDraft && <span className="status draft">draft</span>}
+                                  {conv.isFavorite && <span className="status favorite">★</span>}
+                                </div>
+                              </div>
+                              <p>
+                                {conv.hasDraft
+                                  ? `Черновик: ${conv.draftText.length > 70 ? `${conv.draftText.slice(0, 67)}...` : conv.draftText}`
+                                  : (conv.lastMessage || 'Нет сообщений')}
+                              </p>
+                            </div>
+                            <div className="dashboard-chat-item-side">
+                              <time>{formatTime(conv.lastAt)}</time>
+                              {conv.unreadCount > 0 && <span className="dashboard-pill-badge">{conv.unreadCount}</span>}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="dashboard-list-block">
+                    <div className="dashboard-list-head">
+                      <strong>Draft Queue</strong>
+                      <span>{dashboardDraftQueue.length}</span>
+                    </div>
+                    {dashboardDraftQueue.length === 0 ? (
+                      <div className="empty small">Черновиков нет</div>
+                    ) : (
+                      <div className="dashboard-draft-list">
+                        {dashboardDraftQueue.map((item) => (
+                          <button
+                            key={`dash-draft-${item.id}`}
+                            type="button"
+                            className="dashboard-draft-item"
+                            onClick={() => openConversationFromDashboard(item)}
+                          >
+                            <strong>{item.title}</strong>
+                            <p>{item.draftText.length > 90 ? `${item.draftText.slice(0, 87)}...` : item.draftText}</p>
+                            <span>{item.unreadCount > 0 ? `Unread: ${item.unreadCount}` : 'Готов к отправке'}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </article>
+
+              <article className="dashboard-card dashboard-card-feed">
+                <div className="dashboard-card-head">
+                  <div>
+                    <strong>Feed Pulse</strong>
+                    <span>тренды, хайп и быстрый вход в ленту</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="ghost"
+                    onClick={() => openFeedFocus({ filter: FEED_FILTERS.all, sortMode: FEED_SORT_MODES.smart })}
+                  >
+                    Открыть ленту
+                  </button>
+                </div>
+
+                <div className="dashboard-feed-metrics">
+                  <article>
+                    <span>Momentum</span>
+                    <strong>{feedDigest.momentum}</strong>
+                  </article>
+                  <article>
+                    <span>Fresh</span>
+                    <strong>{feedDigest.freshCount}</strong>
+                  </article>
+                  <article>
+                    <span>Avg</span>
+                    <strong>{feedDigest.avgEngagement}</strong>
+                  </article>
+                  <article>
+                    <span>Media</span>
+                    <strong>{feedDigest.mediaShare}%</strong>
+                  </article>
+                </div>
+
+                <div className="dashboard-feed-panels">
+                  <div className="dashboard-mini-panel">
+                    <div className="dashboard-list-head">
+                      <strong>Трендовые теги</strong>
+                      <span>{trendingTags.length}</span>
+                    </div>
+                    {trendingTags.length === 0 ? (
+                      <div className="empty small">Тегов пока нет</div>
+                    ) : (
+                      <div className="dashboard-tag-cloud">
+                        {trendingTags.map((tag) => (
+                          <button
+                            key={`dash-tag-${tag.tag}`}
+                            type="button"
+                            className="dashboard-tag-pill"
+                            onClick={() => openFeedFocus({ tag: tag.tag, filter: FEED_FILTERS.all, sortMode: FEED_SORT_MODES.smart })}
+                          >
+                            {tag.tag} <span>{tag.count}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="dashboard-mini-panel">
+                    <div className="dashboard-list-head">
+                      <strong>Топ авторы</strong>
+                      <span>{topFeedAuthors.length}</span>
+                    </div>
+                    {topFeedAuthors.length === 0 ? (
+                      <div className="empty small">Нет данных</div>
+                    ) : (
+                      <div className="dashboard-rank-list">
+                        {topFeedAuthors.map((author) => (
+                          <button
+                            key={`dash-author-${author.id}`}
+                            type="button"
+                            className="dashboard-rank-item"
+                            onClick={() => openFeedFocus({ authorId: author.id, sortMode: FEED_SORT_MODES.engagement })}
+                          >
+                            <div>
+                              <strong>{author.displayName || author.username}</strong>
+                              <span>@{author.username}</span>
+                            </div>
+                            <small>{author.engagement} pts</small>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="dashboard-mini-panel">
+                    <div className="dashboard-list-head">
+                      <strong>Горячие посты</strong>
+                      <span>{hotFeedPosts.length}</span>
+                    </div>
+                    {hotFeedPosts.length === 0 ? (
+                      <div className="empty small">Пока тихо</div>
+                    ) : (
+                      <div className="dashboard-rank-list">
+                        {hotFeedPosts.map((item) => (
+                          <button
+                            key={`dash-hot-${item.post.id}`}
+                            type="button"
+                            className="dashboard-rank-item"
+                            onClick={() => openProfile(item.post.author.username)}
+                          >
+                            <div>
+                              <strong>{item.post.author.displayName || item.post.author.username}</strong>
+                              <span>{String(item.post.body || '').trim() ? (String(item.post.body).slice(0, 52) + (String(item.post.body).length > 52 ? '...' : '')) : 'Пост без текста'}</span>
+                            </div>
+                            <small>{item.score} pts</small>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </article>
+
+              <article className="dashboard-card dashboard-card-profile">
+                <div className="dashboard-card-head">
+                  <div>
+                    <strong>Profile Lab</strong>
+                    <span>состояние профиля, витрины и контента</span>
+                  </div>
+                  <button type="button" className="ghost" onClick={() => setView('profile')}>Открыть профиль</button>
+                </div>
+
+                <div className="dashboard-profile-top">
+                  <div className="dashboard-profile-meter">
+                    <span>Готовность профиля</span>
+                    <strong>{profileEditorScore}%</strong>
+                    <div className="dashboard-meter-bar"><span style={{ width: `${profileEditorScore}%` }}></span></div>
+                  </div>
+                  <div className="dashboard-profile-meter">
+                    <span>Power score</span>
+                    <strong>{profilePowerScore}</strong>
+                    <div className="dashboard-meter-bar"><span style={{ width: `${profilePowerScore}%` }}></span></div>
+                  </div>
+                  <div className="dashboard-profile-meter">
+                    <span>Achievements</span>
+                    <strong>{profileAchievementsProgress}%</strong>
+                    <div className="dashboard-meter-bar"><span style={{ width: `${profileAchievementsProgress}%` }}></span></div>
+                  </div>
+                </div>
+
+                <div className="dashboard-profile-stats">
+                  <div><span>Посты</span><strong>{myPostsCount}</strong></div>
+                  <div><span>Треки</span><strong>{myTracks.length}</strong></div>
+                  <div><span>Showcase skills</span><strong>{currentUserShowcase.skills.length}</strong></div>
+                  <div><span>Showcase badges</span><strong>{currentUserShowcase.badges.length}</strong></div>
+                  <div><span>Showcase links</span><strong>{currentUserShowcase.links.length}</strong></div>
+                  <div><span>Статус</span><strong>{userMoodLabel ? 'Yes' : 'No'}</strong></div>
+                </div>
+
+                <div className="dashboard-checklist-preview">
+                  {profileEditorChecklist.slice(0, 6).map((item) => (
+                    <button
+                      key={`dash-check-${item.id}`}
+                      type="button"
+                      className={`dashboard-check-item ${item.done ? 'done' : ''}`.trim()}
+                      onClick={() => setView('profile')}
+                    >
+                      <span>{item.done ? '✓' : '○'}</span>
+                      <small>{item.label}</small>
+                    </button>
+                  ))}
+                </div>
+              </article>
+
+              <article className="dashboard-card dashboard-card-ops">
+                <div className="dashboard-card-head">
+                  <div>
+                    <strong>Focus Queue</strong>
+                    <span>следующие действия для быстрого цикла работы</span>
+                  </div>
+                </div>
+                {dashboardFocusQueue.length === 0 ? (
+                  <div className="empty small">Все ключевые задачи закрыты.</div>
+                ) : (
+                  <div className="dashboard-focus-list">
+                    {dashboardFocusQueue.map((item) => (
+                      <button
+                        key={`dash-focus-${item.id}`}
+                        type="button"
+                        className="dashboard-focus-item"
+                        onClick={() => runDashboardFocusAction(item.action)}
+                      >
+                        <div>
+                          <strong>{item.title}</strong>
+                          <span>{item.text}</span>
+                        </div>
+                        <small>Открыть</small>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                <div className="dashboard-alerts-stack">
+                  {dashboardSystemAlerts.length === 0 ? (
+                    <div className="dashboard-alert-card level-ok">
+                      <strong>Система стабильна</strong>
+                      <span>Realtime, push и рабочая зона выглядят нормально.</span>
+                    </div>
+                  ) : (
+                    dashboardSystemAlerts.map((alert) => (
+                      <div key={`dash-alert-${alert.id}`} className={`dashboard-alert-card level-${alert.level}`.trim()}>
+                        <strong>{alert.title}</strong>
+                        <span>{alert.text}</span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </article>
+
+              <article className="dashboard-card dashboard-card-wide">
+                <div className="dashboard-card-head">
+                  <div>
+                    <strong>Activity Timeline</strong>
+                    <span>последние события по чатам, ленте и активной сессии</span>
+                  </div>
+                </div>
+                {dashboardTimelineSnapshot.length === 0 ? (
+                  <div className="empty small">Пока нет активности для отображения.</div>
+                ) : (
+                  <div className="dashboard-timeline-list">
+                    {dashboardTimelineSnapshot.map((entry) => (
+                      <button
+                        key={entry.id}
+                        type="button"
+                        className={`dashboard-timeline-item kind-${entry.kind}`.trim()}
+                        onClick={() => {
+                          if (entry.kind === 'chat') {
+                            const conversation = conversations.find((item) => item.id === entry.targetId)
+                            if (conversation) openConversationFromDashboard(conversation)
+                            return
+                          }
+                          if (entry.kind === 'active-chat' && entry.messageId) {
+                            setView('chats')
+                            setChatMobilePane('chat')
+                            window.requestAnimationFrame(() => jumpToMessage(entry.messageId))
+                            return
+                          }
+                          if (entry.kind === 'feed') {
+                            setView('feed')
+                          }
+                        }}
+                      >
+                        <div className="dashboard-timeline-kind">
+                          <span>
+                            {entry.kind === 'chat' ? '💬' : entry.kind === 'feed' ? '📰' : '🧭'}
+                          </span>
+                        </div>
+                        <div className="dashboard-timeline-main">
+                          <strong>{entry.title}</strong>
+                          <p>{entry.subtitle || 'Событие'}</p>
+                        </div>
+                        <time>{formatTime(entry.at)}</time>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </article>
+
+              <article className="dashboard-card dashboard-card-session">
+                <div className="dashboard-card-head">
+                  <div>
+                    <strong>Active Session</strong>
+                    <span>текущий чат и контекст работы</span>
+                  </div>
+                  {activeConversation && (
+                    <button type="button" className="ghost" onClick={() => openConversationFromDashboard(activeConversation)}>
+                      В чат
+                    </button>
+                  )}
+                </div>
+
+                {!activeConversation ? (
+                  <div className="empty small">Выбери чат, чтобы увидеть быстрый срез по текущей переписке.</div>
+                ) : (
+                  <div className="dashboard-session-grid">
+                    <div className="dashboard-session-headline">
+                      <strong>{getConversationDisplayName(activeConversation, chatAliasByConversation)}</strong>
+                      <span>
+                        {activeConversation.isGroup
+                          ? 'Групповой чат'
+                          : activeConversation.other?.username
+                            ? `@${activeConversation.other.username}`
+                            : 'Личный чат'}
+                      </span>
+                    </div>
+                    <div className="dashboard-session-metrics">
+                      <div><span>Messages</span><strong>{chatExplorerStats.messages}</strong></div>
+                      <div><span>Media</span><strong>{chatExplorerStats.media}</strong></div>
+                      <div><span>Links</span><strong>{chatExplorerStats.links}</strong></div>
+                      <div><span>Highlights</span><strong>{chatExplorerHighlights.length}</strong></div>
+                    </div>
+                    <div className="dashboard-session-actions">
+                      <button type="button" className="ghost" onClick={() => {
+                        openConversationFromDashboard(activeConversation)
+                        setChatSearchOpen(true)
+                      }}>
+                        Поиск в чате
+                      </button>
+                      <button type="button" className="ghost" onClick={() => {
+                        openConversationFromDashboard(activeConversation)
+                        setBookmarkPanelOpen(true)
+                        loadConversationBookmarks(activeConversation.id)
+                      }}>
+                        Сохраненные
+                      </button>
+                      <button type="button" className="ghost" onClick={() => {
+                        openConversationFromDashboard(activeConversation)
+                        setChatExplorerOpen(true)
+                        setChatExplorerTab(CHAT_EXPLORER_TABS.overview)
+                      }}>
+                        Explorer
+                      </button>
+                    </div>
+                    {callState.status !== 'idle' && (
+                      <div className="dashboard-session-call">
+                        <strong>Звонок</strong>
+                        <span>{callStatusText || `Собеседник: ${callTitle}`}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </article>
+            </div>
+          </div>
         )}
 
         {view === 'chats' && user && (
@@ -9749,6 +10604,14 @@ export default function App() {
 
       {user && (
         <div className="icon-rail icon-rail-root">
+          <button
+            type="button"
+            className={view === 'dashboard' ? 'active' : ''}
+            onClick={() => setView('dashboard')}
+            title="Dashboard"
+          >
+            {icons.dashboard}
+          </button>
           <button
             type="button"
             className={view === 'feed' ? 'active' : ''}
