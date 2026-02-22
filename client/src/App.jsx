@@ -389,7 +389,7 @@ const FEED_LAYOUT_TABS = [
 ]
 const DEFAULT_FEED_EXPLORER_SETTINGS = {
   sortMode: FEED_SORT_MODES.smart,
-  timeWindow: FEED_TIME_WINDOWS.week,
+  timeWindow: FEED_TIME_WINDOWS.all,
   mediaOnly: false,
   layout: FEED_LAYOUTS.cards
 }
@@ -1321,7 +1321,7 @@ export default function App() {
       const parsed = JSON.parse(localStorage.getItem(FEED_EXPLORER_STORAGE_KEY) || '{}')
       return normalizeFeedExplorerSettings(parsed)
     } catch (err) {
-      return DEFAULT_FEED_EXPLORER_SETTINGS
+      return { ...DEFAULT_FEED_EXPLORER_SETTINGS }
     }
   })
   const [bookmarkedPostIds, setBookmarkedPostIds] = useState(() => {
@@ -5119,7 +5119,7 @@ export default function App() {
     setFeedQuery('')
     setActiveFeedTag('')
     setFeedAuthorFilter('')
-    setFeedExplorer(DEFAULT_FEED_EXPLORER_SETTINGS)
+    setFeedExplorer({ ...DEFAULT_FEED_EXPLORER_SETTINGS })
   }
 
   const toggleFeedAuthorFilter = (authorId) => {
@@ -5149,7 +5149,7 @@ export default function App() {
       const current = String(prev || '')
       if (extractHashtags(current).includes(tag)) return current
       const separator = current.trim().length > 0 && !/\s$/.test(current) ? ' ' : ''
-      return `${current}${separator}${tag}`.slice(0, 2000)
+      return `${current}${separator}${tag}`
     })
   }
 
