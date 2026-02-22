@@ -1655,6 +1655,9 @@ export default function App() {
       .slice(0, 8)
   }, [messages])
   const chatExplorerHighlights = useMemo(() => {
+    const explorerBookmarkedMessageIds = activeConversation && activeConversation.id
+      ? new Set(bookmarkedMessageIdsByConversation[activeConversation.id] || [])
+      : new Set()
     const entries = []
     const pushEntry = (entry) => {
       if (!entry || !entry.id || !entry.messageId) return
@@ -1675,7 +1678,7 @@ export default function App() {
     messages.forEach((msg) => {
       if (!msg || !msg.id) return
       const reactionScore = getMessageReactionScore(msg)
-      const bookmarked = activeConversationBookmarkedMessageIds.has(msg.id)
+      const bookmarked = explorerBookmarkedMessageIds.has(msg.id)
       if (msg.poll) {
         pushEntry({
           id: `highlight-poll-${msg.id}`,
@@ -1750,7 +1753,7 @@ export default function App() {
         return (Date.parse(b.createdAt || '') || 0) - (Date.parse(a.createdAt || '') || 0)
       })
       .slice(0, 24)
-  }, [messages, pinnedMessage, activeConversationBookmarkedMessageIds, user])
+  }, [messages, pinnedMessage, activeConversation, bookmarkedMessageIdsByConversation, user])
   const chatExplorerStats = useMemo(() => {
     const mediaCount = chatExplorerMediaItems.length
     const linksCount = chatExplorerLinkItems.length
