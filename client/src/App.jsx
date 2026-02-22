@@ -136,6 +136,36 @@ function extractHashtags(text) {
     .filter(Boolean)
 }
 
+function extractUrls(text) {
+  if (typeof text !== 'string' || !text.trim()) return []
+  const matches = text.match(/https?:\/\/[^\s<>"']+/gi) || []
+  return matches
+    .map((url) => String(url || '').trim().replace(/[),.;!?]+$/g, ''))
+    .filter(Boolean)
+}
+
+function getUrlHostname(url) {
+  try {
+    return new URL(url).hostname.replace(/^www\./i, '')
+  } catch {
+    return ''
+  }
+}
+
+function getMessageReactionScore(message) {
+  if (!message || !Array.isArray(message.reactions)) return 0
+  return message.reactions.reduce((acc, item) => acc + Math.max(0, Number(item.count || 0)), 0)
+}
+
+function getMessageAttachmentFamily(message) {
+  if (!message || !message.attachmentUrl) return ''
+  if (message.attachmentKind === 'sticker') return 'sticker'
+  if (message.attachmentKind === 'gif') return 'gif'
+  if (message.attachmentKind === VIDEO_NOTE_KIND) return 'video-note'
+  if (isVideoMessageAttachment(message)) return 'video'
+  return 'image'
+}
+
 function escapeRegExp(value) {
   return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
@@ -348,6 +378,26 @@ const CHAT_LIST_FILTERS = {
   all: 'all',
   unread: 'unread',
   favorites: 'favorites'
+}
+const CHAT_EXPLORER_TABS = {
+  overview: 'overview',
+  media: 'media',
+  links: 'links',
+  highlights: 'highlights'
+}
+const CHAT_EXPLORER_TAB_OPTIONS = [
+  { value: CHAT_EXPLORER_TABS.overview, label: 'Обзор' },
+  { value: CHAT_EXPLORER_TABS.media, label: 'Медиа' },
+  { value: CHAT_EXPLORER_TABS.links, label: 'Ссылки' },
+  { value: CHAT_EXPLORER_TABS.highlights, label: 'Хайлайты' }
+]
+const CHAT_HIGHLIGHT_KIND_META = {
+  pinned: { icon: '📌', label: 'Закреп' },
+  poll: { icon: '📊', label: 'Опрос' },
+  bookmark: { icon: '🔖', label: 'Сохранено' },
+  reaction: { icon: '✨', label: 'Реакции' },
+  forward: { icon: '↪', label: 'Переслано' },
+  reply: { icon: '↩', label: 'Ответ' }
 }
 const FEED_FILTERS = {
   all: 'all',
@@ -1384,6 +1434,9 @@ export default function App() {
   })
   const [chatSearchOpen, setChatSearchOpen] = useState(false)
   const [chatSearchQuery, setChatSearchQuery] = useState('')
+  const [chatExplorerOpen, setChatExplorerOpen] = useState(false)
+  const [chatExplorerTab, setChatExplorerTab] = useState(CHAT_EXPLORER_TABS.overview)
+  const [chatExplorerQuery, setChatExplorerQuery] = useState('')
   const [chatMobilePane, setChatMobilePane] = useState('list')
   const [pinnedByConversation, setPinnedByConversation] = useState({})
   const [blockedUsers, setBlockedUsers] = useState(() => {
@@ -1483,6 +1536,278 @@ export default function App() {
     if (!query) return messages
     return messages.filter((msg) => (msg.body || '').toLowerCase().includes(query))
   }, [messages, chatSearchQuery])
+  const chatExplorerQueryNormalized = chatExplorerQuery.trim().toLowerCase()
+  const chatExplorerMediaItems = useMemo(() => {
+    return messages
+      .filter((msg) => Boolean(msg && msg.id && msg.attachmentUrl))
+      .map((msg) => {
+        const family = getMessageAttachmentFamily(msg)
+        return {
+          id: `media-${msg.id}`,
+          messageId: msg.id,
+          url: resolveMediaUrl(msg.attachmentUrl),
+          family,
+          preview: getMessagePreviewLabel(msg, 'Медиа'),
+          body: String(msg.body || '').trim(),
+          createdAt: msg.createdAt || null,
+          senderId: msg.senderId || null,
+          senderUsername: msg.senderUsername || '',
+          senderDisplayName: msg.senderDisplayName || ''
+        }
+      })
+      .sort((a, b) => (Date.parse(b.createdAt || '') || 0) - (Date.parse(a.createdAt || '') || 0))
+  }, [messages])
+  const chatExplorerLinkItems = useMemo(() => {
+    const rows = []
+    messages.forEach((msg) => {
+      const urls = extractUrls(msg && msg.body)
+      if (!urls.length) return
+      urls.forEach((url, index) => {
+        rows.push({
+          id: `link-${msg.id}-${index}`,
+          messageId: msg.id,
+          url,
+          hostname: getUrlHostname(url),
+          preview: String(msg.body || '').trim(),
+          createdAt: msg.createdAt || null,
+          senderId: msg.senderId || null,
+          senderUsername: msg.senderUsername || '',
+          senderDisplayName: msg.senderDisplayName || ''
+        })
+      })
+    })
+    return rows.sort((a, b) => (Date.parse(b.createdAt || '') || 0) - (Date.parse(a.createdAt || '') || 0))
+  }, [messages])
+  const chatExplorerTopSenders = useMemo(() => {
+    const map = new Map()
+    messages.forEach((msg) => {
+      if (!msg || !msg.id || !msg.senderId) return
+      const key = msg.senderId
+      const current = map.get(key) || {
+        id: key,
+        senderId: key,
+        label: (user && msg.senderId === user.id) ? 'Вы' : (msg.senderDisplayName || msg.senderUsername || 'Пользователь'),
+        username: msg.senderUsername || '',
+        count: 0,
+        mediaCount: 0,
+        reactionScore: 0
+      }
+      current.count += 1
+      if (msg.attachmentUrl) current.mediaCount += 1
+      current.reactionScore += getMessageReactionScore(msg)
+      map.set(key, current)
+    })
+    return Array.from(map.values())
+      .sort((a, b) => {
+        if (b.count !== a.count) return b.count - a.count
+        if (b.reactionScore !== a.reactionScore) return b.reactionScore - a.reactionScore
+        return a.label.localeCompare(b.label)
+      })
+      .slice(0, 6)
+  }, [messages, user])
+  const chatExplorerReactionSummary = useMemo(() => {
+    const totals = new Map()
+    messages.forEach((msg) => {
+      if (!Array.isArray(msg.reactions)) return
+      msg.reactions.forEach((item) => {
+        const emoji = String(item.emoji || '')
+        if (!emoji) return
+        const count = Math.max(0, Number(item.count || 0))
+        totals.set(emoji, (totals.get(emoji) || 0) + count)
+      })
+    })
+    return Array.from(totals.entries())
+      .map(([emoji, count]) => ({ emoji, count }))
+      .sort((a, b) => {
+        if (b.count !== a.count) return b.count - a.count
+        return a.emoji.localeCompare(b.emoji)
+      })
+      .slice(0, 12)
+  }, [messages])
+  const chatExplorerTimelineDays = useMemo(() => {
+    const dayMap = new Map()
+    messages.forEach((msg) => {
+      const createdMs = Date.parse(msg.createdAt || '') || 0
+      if (!createdMs) return
+      const dateKey = new Date(createdMs).toISOString().slice(0, 10)
+      const current = dayMap.get(dateKey) || {
+        key: dateKey,
+        dateLabel: formatDate(msg.createdAt),
+        count: 0,
+        firstMessageId: msg.id,
+        lastMessageId: msg.id,
+        firstMs: createdMs,
+        lastMs: createdMs
+      }
+      current.count += 1
+      if (createdMs < current.firstMs) {
+        current.firstMs = createdMs
+        current.firstMessageId = msg.id
+      }
+      if (createdMs > current.lastMs) {
+        current.lastMs = createdMs
+        current.lastMessageId = msg.id
+      }
+      dayMap.set(dateKey, current)
+    })
+    return Array.from(dayMap.values())
+      .sort((a, b) => b.lastMs - a.lastMs)
+      .slice(0, 8)
+  }, [messages])
+  const chatExplorerHighlights = useMemo(() => {
+    const entries = []
+    const pushEntry = (entry) => {
+      if (!entry || !entry.id || !entry.messageId) return
+      entries.push(entry)
+    }
+    if (pinnedMessage && pinnedMessage.id) {
+      pushEntry({
+        id: `highlight-pinned-${pinnedMessage.id}`,
+        messageId: pinnedMessage.id,
+        kind: 'pinned',
+        title: 'Закрепленное сообщение',
+        subtitle: pinnedMessage.senderUsername ? `@${pinnedMessage.senderUsername}` : '',
+        preview: getMessagePreviewLabel(pinnedMessage, 'Сообщение'),
+        score: 1000000,
+        createdAt: pinnedMessage.createdAt || null
+      })
+    }
+    messages.forEach((msg) => {
+      if (!msg || !msg.id) return
+      const reactionScore = getMessageReactionScore(msg)
+      const bookmarked = activeConversationBookmarkedMessageIds.has(msg.id)
+      if (msg.poll) {
+        pushEntry({
+          id: `highlight-poll-${msg.id}`,
+          messageId: msg.id,
+          kind: 'poll',
+          title: 'Опрос',
+          subtitle: (user && msg.senderId === user.id) ? 'Вы' : (msg.senderDisplayName || msg.senderUsername || 'Пользователь'),
+          preview: getMessagePreviewLabel(msg, 'Опрос'),
+          score: 300 + reactionScore + Math.max(0, Number(msg.poll.totalVotes || 0)),
+          createdAt: msg.createdAt || null
+        })
+      }
+      if (bookmarked) {
+        pushEntry({
+          id: `highlight-bookmark-${msg.id}`,
+          messageId: msg.id,
+          kind: 'bookmark',
+          title: 'Сохраненное',
+          subtitle: (user && msg.senderId === user.id) ? 'Вы' : (msg.senderDisplayName || msg.senderUsername || 'Пользователь'),
+          preview: getMessagePreviewLabel(msg, 'Сообщение'),
+          score: 220 + reactionScore,
+          createdAt: msg.createdAt || null
+        })
+      }
+      if (reactionScore > 0) {
+        pushEntry({
+          id: `highlight-react-${msg.id}`,
+          messageId: msg.id,
+          kind: 'reaction',
+          title: `Реакции • ${reactionScore}`,
+          subtitle: (user && msg.senderId === user.id) ? 'Вы' : (msg.senderDisplayName || msg.senderUsername || 'Пользователь'),
+          preview: getMessagePreviewLabel(msg, 'Сообщение'),
+          score: 100 + reactionScore,
+          createdAt: msg.createdAt || null
+        })
+      }
+      if (msg.forwardedFrom) {
+        pushEntry({
+          id: `highlight-fwd-${msg.id}`,
+          messageId: msg.id,
+          kind: 'forward',
+          title: 'Переслано',
+          subtitle: msg.forwardedFrom.sourceSenderUsername ? `@${msg.forwardedFrom.sourceSenderUsername}` : '',
+          preview: getMessagePreviewLabel(msg, 'Сообщение'),
+          score: 70 + reactionScore,
+          createdAt: msg.createdAt || null
+        })
+      }
+      if (msg.replyTo) {
+        pushEntry({
+          id: `highlight-reply-${msg.id}`,
+          messageId: msg.id,
+          kind: 'reply',
+          title: 'Ответ',
+          subtitle: (user && msg.senderId === user.id) ? 'Вы' : (msg.senderDisplayName || msg.senderUsername || 'Пользователь'),
+          preview: getMessagePreviewLabel(msg, 'Сообщение'),
+          score: 60 + reactionScore,
+          createdAt: msg.createdAt || null
+        })
+      }
+    })
+    const dedupByMessage = new Map()
+    entries.forEach((entry) => {
+      const existing = dedupByMessage.get(entry.messageId)
+      if (!existing || entry.score > existing.score) {
+        dedupByMessage.set(entry.messageId, entry)
+      }
+    })
+    return Array.from(dedupByMessage.values())
+      .sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score
+        return (Date.parse(b.createdAt || '') || 0) - (Date.parse(a.createdAt || '') || 0)
+      })
+      .slice(0, 24)
+  }, [messages, pinnedMessage, activeConversationBookmarkedMessageIds, user])
+  const chatExplorerStats = useMemo(() => {
+    const mediaCount = chatExplorerMediaItems.length
+    const linksCount = chatExplorerLinkItems.length
+    const pollsCount = messages.reduce((acc, msg) => acc + (msg && msg.poll ? 1 : 0), 0)
+    const reactionMessages = messages.reduce((acc, msg) => acc + (getMessageReactionScore(msg) > 0 ? 1 : 0), 0)
+    const replyCount = messages.reduce((acc, msg) => acc + (msg && msg.replyTo ? 1 : 0), 0)
+    const uniqueSenders = new Set(messages.map((msg) => msg && msg.senderId).filter(Boolean)).size
+    return {
+      messages: messages.length,
+      media: mediaCount,
+      links: linksCount,
+      polls: pollsCount,
+      reactionMessages,
+      replies: replyCount,
+      uniqueSenders
+    }
+  }, [messages, chatExplorerMediaItems.length, chatExplorerLinkItems.length])
+  const chatExplorerLatestPollMessage = useMemo(() => (
+    [...messages].reverse().find((msg) => msg && msg.poll) || null
+  ), [messages])
+  const chatExplorerTopReactedMessage = useMemo(() => (
+    [...messages]
+      .filter((msg) => getMessageReactionScore(msg) > 0)
+      .sort((a, b) => {
+        const scoreDiff = getMessageReactionScore(b) - getMessageReactionScore(a)
+        if (scoreDiff !== 0) return scoreDiff
+        return (Date.parse(b.createdAt || '') || 0) - (Date.parse(a.createdAt || '') || 0)
+      })[0] || null
+  ), [messages])
+  const chatExplorerFirstMessage = messages.length > 0 ? messages[0] : null
+  const filteredChatExplorerMediaItems = useMemo(() => {
+    if (!chatExplorerQueryNormalized) return chatExplorerMediaItems
+    return chatExplorerMediaItems.filter((item) => (
+      item.family.includes(chatExplorerQueryNormalized) ||
+      item.preview.toLowerCase().includes(chatExplorerQueryNormalized) ||
+      item.body.toLowerCase().includes(chatExplorerQueryNormalized) ||
+      String(item.senderDisplayName || item.senderUsername || '').toLowerCase().includes(chatExplorerQueryNormalized)
+    ))
+  }, [chatExplorerMediaItems, chatExplorerQueryNormalized])
+  const filteredChatExplorerLinkItems = useMemo(() => {
+    if (!chatExplorerQueryNormalized) return chatExplorerLinkItems
+    return chatExplorerLinkItems.filter((item) => (
+      item.url.toLowerCase().includes(chatExplorerQueryNormalized) ||
+      item.hostname.toLowerCase().includes(chatExplorerQueryNormalized) ||
+      item.preview.toLowerCase().includes(chatExplorerQueryNormalized) ||
+      String(item.senderDisplayName || item.senderUsername || '').toLowerCase().includes(chatExplorerQueryNormalized)
+    ))
+  }, [chatExplorerLinkItems, chatExplorerQueryNormalized])
+  const filteredChatExplorerHighlights = useMemo(() => {
+    if (!chatExplorerQueryNormalized) return chatExplorerHighlights
+    return chatExplorerHighlights.filter((item) => (
+      String(item.kind || '').toLowerCase().includes(chatExplorerQueryNormalized) ||
+      String(item.title || '').toLowerCase().includes(chatExplorerQueryNormalized) ||
+      String(item.subtitle || '').toLowerCase().includes(chatExplorerQueryNormalized) ||
+      String(item.preview || '').toLowerCase().includes(chatExplorerQueryNormalized)
+    ))
+  }, [chatExplorerHighlights, chatExplorerQueryNormalized])
   const lastMessageId = messages.length > 0 ? messages[messages.length - 1].id : null
   const favoriteConversationSet = useMemo(() => (
     new Set(conversations.filter((conv) => conv.isFavorite).map((conv) => conv.id))
@@ -3582,6 +3907,8 @@ export default function App() {
   useEffect(() => {
     setChatSearchOpen(false)
     setChatSearchQuery('')
+    setChatExplorerQuery('')
+    setChatExplorerTab(CHAT_EXPLORER_TABS.overview)
     setContextMenu(INITIAL_MESSAGE_MENU_STATE)
     setPostMenu(INITIAL_POST_MENU_STATE)
     setChatMenu(INITIAL_CHAT_MENU_STATE)
@@ -6679,6 +7006,18 @@ export default function App() {
                         </button>
                         <button
                           type="button"
+                          className={`chat-action ${chatExplorerOpen ? 'favorite' : ''}`.trim()}
+                          onClick={() => {
+                            setChatExplorerOpen((prev) => !prev)
+                            setChatExplorerTab(CHAT_EXPLORER_TABS.overview)
+                            setChatExplorerQuery('')
+                          }}
+                          title={chatExplorerOpen ? 'Скрыть Chat Explorer' : 'Открыть Chat Explorer'}
+                        >
+                          🧭
+                        </button>
+                        <button
+                          type="button"
                           className="chat-action"
                           onClick={cycleChatWallpaper}
                           title={`Тема чата: ${activeChatWallpaper.label}`}
@@ -6767,6 +7106,320 @@ export default function App() {
                               </button>
                             ))}
                           </div>
+                        )}
+                      </div>
+                    )}
+                    {chatExplorerOpen && (
+                      <div className="chat-explorer-panel">
+                        <div className="chat-explorer-head">
+                          <div className="chat-explorer-headline">
+                            <strong>Chat Explorer</strong>
+                            <span>
+                              {chatExplorerStats.messages} сообщений • {chatExplorerStats.media} медиа • {chatExplorerStats.links} ссылок
+                            </span>
+                          </div>
+                          <div className="chat-explorer-search">
+                            <span>⌕</span>
+                            <input
+                              type="text"
+                              value={chatExplorerQuery}
+                              onChange={(event) => setChatExplorerQuery(event.target.value)}
+                              placeholder={
+                                chatExplorerTab === CHAT_EXPLORER_TABS.media
+                                  ? 'Фильтр по медиа и автору'
+                                  : chatExplorerTab === CHAT_EXPLORER_TABS.links
+                                    ? 'Фильтр по ссылке, домену или тексту'
+                                    : chatExplorerTab === CHAT_EXPLORER_TABS.highlights
+                                      ? 'Фильтр по хайлайтам'
+                                      : 'Быстрый фильтр'
+                              }
+                            />
+                            {chatExplorerQuery && (
+                              <button type="button" onClick={() => setChatExplorerQuery('')} title="Очистить">
+                                ×
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="chat-explorer-tabs" role="tablist" aria-label="Chat Explorer">
+                          {CHAT_EXPLORER_TAB_OPTIONS.map((tab) => (
+                            <button
+                              key={tab.value}
+                              type="button"
+                              role="tab"
+                              aria-selected={chatExplorerTab === tab.value}
+                              className={chatExplorerTab === tab.value ? 'active' : ''}
+                              onClick={() => setChatExplorerTab(tab.value)}
+                            >
+                              {tab.label}
+                            </button>
+                          ))}
+                        </div>
+
+                        {messages.length === 0 ? (
+                          <div className="empty small">Здесь появятся медиа, ссылки и хайлайты после сообщений.</div>
+                        ) : (
+                          <>
+                            {chatExplorerTab === CHAT_EXPLORER_TABS.overview && (
+                              <div className="chat-explorer-overview">
+                                <div className="chat-explorer-stats-grid">
+                                  <article>
+                                    <span>Сообщения</span>
+                                    <strong>{chatExplorerStats.messages}</strong>
+                                  </article>
+                                  <article>
+                                    <span>Участники</span>
+                                    <strong>{chatExplorerStats.uniqueSenders}</strong>
+                                  </article>
+                                  <article>
+                                    <span>Медиа</span>
+                                    <strong>{chatExplorerStats.media}</strong>
+                                  </article>
+                                  <article>
+                                    <span>Ссылки</span>
+                                    <strong>{chatExplorerStats.links}</strong>
+                                  </article>
+                                  <article>
+                                    <span>Опросы</span>
+                                    <strong>{chatExplorerStats.polls}</strong>
+                                  </article>
+                                  <article>
+                                    <span>Ответы</span>
+                                    <strong>{chatExplorerStats.replies}</strong>
+                                  </article>
+                                </div>
+
+                                <div className="chat-explorer-overview-grid">
+                                  <article className="chat-explorer-card">
+                                    <div className="chat-explorer-card-head">
+                                      <strong>Топ участники</strong>
+                                      <span>{chatExplorerTopSenders.length}</span>
+                                    </div>
+                                    {chatExplorerTopSenders.length === 0 ? (
+                                      <div className="empty small">Пока пусто</div>
+                                    ) : (
+                                      <div className="chat-explorer-person-list">
+                                        {chatExplorerTopSenders.map((item) => (
+                                          <button
+                                            key={`explorer-sender-${item.senderId}`}
+                                            type="button"
+                                            className="chat-explorer-person-item"
+                                            onClick={() => {
+                                              const target = [...messages].reverse().find((msg) => msg.senderId === item.senderId)
+                                              if (target) jumpToMessage(target.id)
+                                            }}
+                                            title="Перейти к последнему сообщению автора"
+                                          >
+                                            <div>
+                                              <strong>{item.label}</strong>
+                                              {item.username && <span>@{item.username}</span>}
+                                            </div>
+                                            <small>{item.count} • media {item.mediaCount}</small>
+                                          </button>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </article>
+
+                                  <article className="chat-explorer-card">
+                                    <div className="chat-explorer-card-head">
+                                      <strong>Реакции</strong>
+                                      <span>{chatExplorerReactionSummary.reduce((acc, item) => acc + item.count, 0)}</span>
+                                    </div>
+                                    {chatExplorerReactionSummary.length === 0 ? (
+                                      <div className="empty small">Без реакций</div>
+                                    ) : (
+                                      <div className="chat-explorer-reaction-cloud">
+                                        {chatExplorerReactionSummary.map((item) => (
+                                          <div key={`explorer-emoji-${item.emoji}`} className="chat-explorer-reaction-chip">
+                                            <span>{item.emoji}</span>
+                                            <strong>{item.count}</strong>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </article>
+
+                                  <article className="chat-explorer-card">
+                                    <div className="chat-explorer-card-head">
+                                      <strong>Быстрые переходы</strong>
+                                      <span>jump</span>
+                                    </div>
+                                    <div className="chat-explorer-jump-list">
+                                      {chatExplorerFirstMessage && (
+                                        <button type="button" onClick={() => jumpToMessage(chatExplorerFirstMessage.id)}>
+                                          <span>Начало диалога</span>
+                                          <small>{formatDate(chatExplorerFirstMessage.createdAt)} • {getMessagePreview(chatExplorerFirstMessage)}</small>
+                                        </button>
+                                      )}
+                                      {chatExplorerMediaItems[0] && (
+                                        <button type="button" onClick={() => jumpToMessage(chatExplorerMediaItems[0].messageId)}>
+                                          <span>Последнее медиа</span>
+                                          <small>{formatTime(chatExplorerMediaItems[0].createdAt)} • {chatExplorerMediaItems[0].preview}</small>
+                                        </button>
+                                      )}
+                                      {chatExplorerLatestPollMessage && (
+                                        <button type="button" onClick={() => jumpToMessage(chatExplorerLatestPollMessage.id)}>
+                                          <span>Последний опрос</span>
+                                          <small>{formatTime(chatExplorerLatestPollMessage.createdAt)} • {getMessagePreview(chatExplorerLatestPollMessage)}</small>
+                                        </button>
+                                      )}
+                                      {chatExplorerTopReactedMessage && (
+                                        <button type="button" onClick={() => jumpToMessage(chatExplorerTopReactedMessage.id)}>
+                                          <span>Самое реактивное</span>
+                                          <small>✨ {getMessageReactionScore(chatExplorerTopReactedMessage)} • {getMessagePreview(chatExplorerTopReactedMessage)}</small>
+                                        </button>
+                                      )}
+                                      {chatExplorerLinkItems[0] && (
+                                        <button type="button" onClick={() => jumpToMessage(chatExplorerLinkItems[0].messageId)}>
+                                          <span>Последняя ссылка</span>
+                                          <small>{chatExplorerLinkItems[0].hostname || 'ссылка'} • {formatTime(chatExplorerLinkItems[0].createdAt)}</small>
+                                        </button>
+                                      )}
+                                    </div>
+                                  </article>
+
+                                  <article className="chat-explorer-card">
+                                    <div className="chat-explorer-card-head">
+                                      <strong>Таймлайн</strong>
+                                      <span>{chatExplorerTimelineDays.length} дней</span>
+                                    </div>
+                                    {chatExplorerTimelineDays.length === 0 ? (
+                                      <div className="empty small">Недостаточно данных</div>
+                                    ) : (
+                                      <div className="chat-explorer-timeline-list">
+                                        {chatExplorerTimelineDays.map((day) => (
+                                          <button
+                                            key={`explorer-day-${day.key}`}
+                                            type="button"
+                                            className="chat-explorer-timeline-item"
+                                            onClick={() => jumpToMessage(day.lastMessageId)}
+                                            title="Перейти к последнему сообщению этого дня"
+                                          >
+                                            <div>
+                                              <strong>{day.dateLabel || day.key}</strong>
+                                              <span>{day.count} сообщений</span>
+                                            </div>
+                                            <small>{formatTime(day.lastMs)}</small>
+                                          </button>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </article>
+                                </div>
+                              </div>
+                            )}
+
+                            {chatExplorerTab === CHAT_EXPLORER_TABS.media && (
+                              <div className="chat-explorer-media">
+                                {filteredChatExplorerMediaItems.length === 0 ? (
+                                  <div className="empty small">
+                                    {chatExplorerMediaItems.length === 0 ? 'В этом чате пока нет медиа.' : 'По фильтру медиа не найдено.'}
+                                  </div>
+                                ) : (
+                                  <div className="chat-explorer-media-grid">
+                                    {filteredChatExplorerMediaItems.map((item) => (
+                                      <button
+                                        key={item.id}
+                                        type="button"
+                                        className={`chat-explorer-media-item family-${item.family}`.trim()}
+                                        onClick={() => jumpToMessage(item.messageId)}
+                                        title="Перейти к сообщению"
+                                      >
+                                        <div className="chat-explorer-media-preview">
+                                          {item.family === 'image' || item.family === 'gif' || item.family === 'sticker' ? (
+                                            <img src={item.url} alt={item.preview || 'media'} loading="lazy" />
+                                          ) : (
+                                            <div className="chat-explorer-media-placeholder">
+                                              <span>{item.family === 'video-note' ? '🎥' : '🎬'}</span>
+                                              <small>{item.family === 'video-note' ? 'видеосообщение' : 'видео'}</small>
+                                            </div>
+                                          )}
+                                          <span className="chat-explorer-media-badge">{item.family}</span>
+                                        </div>
+                                        <div className="chat-explorer-media-meta">
+                                          <strong>{item.senderDisplayName || item.senderUsername || 'Пользователь'}</strong>
+                                          <span>{formatTime(item.createdAt)}</span>
+                                          {item.body && <p>{item.body.length > 60 ? `${item.body.slice(0, 57)}...` : item.body}</p>}
+                                        </div>
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {chatExplorerTab === CHAT_EXPLORER_TABS.links && (
+                              <div className="chat-explorer-links">
+                                {filteredChatExplorerLinkItems.length === 0 ? (
+                                  <div className="empty small">
+                                    {chatExplorerLinkItems.length === 0 ? 'Ссылок в текущих сообщениях нет.' : 'По фильтру ссылки не найдены.'}
+                                  </div>
+                                ) : (
+                                  <div className="chat-explorer-link-list">
+                                    {filteredChatExplorerLinkItems.map((item) => (
+                                      <article key={item.id} className="chat-explorer-link-item">
+                                        <div className="chat-explorer-link-main">
+                                          <div className="chat-explorer-link-host">
+                                            <strong>{item.hostname || 'link'}</strong>
+                                            <span>{formatDate(item.createdAt)} • {formatTime(item.createdAt)}</span>
+                                          </div>
+                                          <a href={item.url} target="_blank" rel="noreferrer" title={item.url}>
+                                            {item.url}
+                                          </a>
+                                          <p>{item.preview || 'Сообщение со ссылкой'}</p>
+                                          <small>{item.senderDisplayName || item.senderUsername || 'Пользователь'}</small>
+                                        </div>
+                                        <div className="chat-explorer-link-actions">
+                                          <button type="button" className="ghost" onClick={() => jumpToMessage(item.messageId)}>
+                                            К сообщению
+                                          </button>
+                                        </div>
+                                      </article>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {chatExplorerTab === CHAT_EXPLORER_TABS.highlights && (
+                              <div className="chat-explorer-highlights">
+                                {filteredChatExplorerHighlights.length === 0 ? (
+                                  <div className="empty small">
+                                    {chatExplorerHighlights.length === 0 ? 'Хайлайты появятся после реакций, закрепа, опросов и ответов.' : 'По фильтру хайлайты не найдены.'}
+                                  </div>
+                                ) : (
+                                  <div className="chat-explorer-highlight-list">
+                                    {filteredChatExplorerHighlights.map((item) => {
+                                      const meta = CHAT_HIGHLIGHT_KIND_META[item.kind] || { icon: '•', label: item.kind || 'item' }
+                                      return (
+                                        <button
+                                          key={item.id}
+                                          type="button"
+                                          className={`chat-explorer-highlight-item kind-${item.kind}`.trim()}
+                                          onClick={() => jumpToMessage(item.messageId)}
+                                        >
+                                          <div className="chat-explorer-highlight-badge">
+                                            <span>{meta.icon}</span>
+                                            <small>{meta.label}</small>
+                                          </div>
+                                          <div className="chat-explorer-highlight-main">
+                                            <div className="chat-explorer-highlight-head">
+                                              <strong>{item.title}</strong>
+                                              <time>{formatTime(item.createdAt)}</time>
+                                            </div>
+                                            {item.subtitle && <span className="chat-explorer-highlight-sub">{item.subtitle}</span>}
+                                            <p>{item.preview || 'Сообщение'}</p>
+                                          </div>
+                                        </button>
+                                      )
+                                    })}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </>
                         )}
                       </div>
                     )}
