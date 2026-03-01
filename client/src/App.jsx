@@ -637,6 +637,8 @@ const INITIAL_MINI_PROFILE_CARD_STATE = {
   y: 0,
   user: null
 }
+const MINI_PROFILE_CARD_ESTIMATED_WIDTH = 280
+const MINI_PROFILE_CARD_ESTIMATED_HEIGHT = 190
 const QUICK_MESSAGE_REACTIONS = ['❤️', '👍', '😭', '👎', '🤩', '🐳', '❤️‍🔥']
 const ALL_MESSAGE_REACTIONS = Array.from(new Set([
   ...QUICK_MESSAGE_REACTIONS,
@@ -6262,15 +6264,14 @@ export default function App() {
   }
 
   const resolveMiniProfilePosition = (clientX, clientY) => {
-    if (typeof window === 'undefined') return { x: 20, y: 20 }
-    const cardWidth = 280
-    const cardHeight = 190
-    const offset = 14
-    const maxX = Math.max(8, window.innerWidth - cardWidth - 8)
-    const maxY = Math.max(8, window.innerHeight - cardHeight - 8)
-    const nextX = clampNumber(clientX + offset, 8, maxX)
-    const nextY = clampNumber(clientY + offset, 8, maxY)
-    return { x: nextX, y: nextY }
+    if (typeof window === 'undefined' || typeof document === 'undefined') return { x: 20, y: 20 }
+    return getMenuPosition(
+      Number(clientX || 0),
+      Number(clientY || 0),
+      MINI_PROFILE_CARD_ESTIMATED_WIDTH,
+      MINI_PROFILE_CARD_ESTIMATED_HEIGHT,
+      { padding: 8, gap: 12 }
+    )
   }
 
   const normalizeMiniProfileUser = (rawUser) => {
@@ -11140,7 +11141,7 @@ export default function App() {
           document.body
         )}
 
-        {miniProfileCard.open && miniProfileCard.user && (
+        {miniProfileCard.open && miniProfileCard.user && typeof document !== 'undefined' && createPortal(
           <div
             className="mini-profile-card"
             style={{ top: `${miniProfileCard.y}px`, left: `${miniProfileCard.x}px` }}
@@ -11178,7 +11179,8 @@ export default function App() {
                 <button type="button" className="primary" onClick={handleMiniProfileMessage}>Написать</button>
               )}
             </div>
-          </div>
+          </div>,
+          document.body
         )}
 
         {callState.status === 'incoming' && (
