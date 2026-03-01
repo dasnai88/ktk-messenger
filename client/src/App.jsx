@@ -1524,6 +1524,7 @@ export default function App() {
     confirmPassword: ''
   })
   const [settingsSection, setSettingsSection] = useState('general')
+  const [settingsNavQuery, setSettingsNavQuery] = useState('')
   const [status, setStatus] = useState({ type: 'info', message: '' })
   const [theme, setTheme] = useState(() => {
     if (typeof window === 'undefined') return 'dark'
@@ -6423,6 +6424,7 @@ export default function App() {
       confirmPassword: ''
     })
     setSettingsSection('general')
+    setSettingsNavQuery('')
     setView('login')
     setActiveConversation(null)
     setChatMobilePane('list')
@@ -8976,6 +8978,23 @@ export default function App() {
     twoFactorStatus.enabled,
     uiPreferences.style
   ])
+  const settingsNavQueryNormalized = String(settingsNavQuery || '').trim().toLowerCase()
+  const settingsVisibleNavItems = useMemo(() => {
+    if (!settingsNavQueryNormalized) return settingsNavItems
+    return settingsNavItems.filter((item) => (
+      `${item.id} ${item.label} ${item.badge || ''}`.toLowerCase().includes(settingsNavQueryNormalized)
+    ))
+  }, [settingsNavItems, settingsNavQueryNormalized])
+  const settingsQuickTabs = useMemo(() => (
+    settingsNavItems.filter((item) => (
+      item.id === 'general' ||
+      item.id === 'privacy' ||
+      item.id === 'security' ||
+      item.id === 'sessions' ||
+      item.id === 'appearance' ||
+      item.id === 'notifications'
+    ))
+  ), [settingsNavItems])
   const settingsCurrentItem = useMemo(() => (
     settingsNavItems.find((item) => item.id === settingsSection) || settingsNavItems[0] || null
   ), [settingsNavItems, settingsSection])
@@ -8996,6 +9015,7 @@ export default function App() {
     return hints[settingsSection] || 'Управление настройками аккаунта.'
   }, [settingsSection])
   const settingsSecurityBadge = twoFactorStatus.enabled ? '2FA ON' : '2FA OFF'
+  const settingsPanelClassName = `panel settings-panel settings-theme-${settingsSection}`.trim()
 
   return (
     <div className="page">
@@ -12439,7 +12459,7 @@ export default function App() {
         )}
 
         {view === 'settings' && user && (
-          <section className="panel settings-panel">
+          <section className={settingsPanelClassName}>
             <div className="settings-shell">
               <aside className="settings-sidebar">
                 <div className="settings-account-card">
@@ -12466,8 +12486,17 @@ export default function App() {
                 </div>
                 <div className="settings-nav-wrap">
                   <span className="settings-nav-caption">Разделы</span>
+                  <label className="settings-nav-search">
+                    <input
+                      type="text"
+                      value={settingsNavQuery}
+                      onChange={(event) => setSettingsNavQuery(event.target.value)}
+                      placeholder="Поиск по настройкам"
+                      maxLength={60}
+                    />
+                  </label>
                   <nav className="settings-nav">
-                    {settingsNavItems.map((item) => (
+                    {settingsVisibleNavItems.map((item) => (
                       <button
                         key={`settings-nav-${item.id}`}
                         type="button"
@@ -12479,6 +12508,9 @@ export default function App() {
                         {item.badge ? <span className="settings-nav-badge">{item.badge}</span> : null}
                       </button>
                     ))}
+                    {settingsVisibleNavItems.length === 0 ? (
+                      <div className="settings-nav-empty">Ничего не найдено</div>
+                    ) : null}
                   </nav>
                 </div>
               </aside>
@@ -12509,6 +12541,19 @@ export default function App() {
                       <strong>{privacyControls.length}</strong>
                     </article>
                   </div>
+                </section>
+                <section className="settings-quick-tabs" aria-label="Быстрые разделы настроек">
+                  {settingsQuickTabs.map((item) => (
+                    <button
+                      key={`settings-quick-tab-${item.id}`}
+                      type="button"
+                      className={settingsSection === item.id ? 'active' : ''}
+                      onClick={() => setSettingsSection(item.id)}
+                    >
+                      <span aria-hidden="true">{item.icon}</span>
+                      {item.label}
+                    </button>
+                  ))}
                 </section>
                 {settingsSection === 'general' && (
                   <section className="settings-pane">
