@@ -163,6 +163,13 @@ export async function updateMe(payload) {
   return request('/me', { method: 'PATCH', body: payload })
 }
 
+export async function changeMyPassword(currentPassword, newPassword) {
+  return request('/me/change-password', {
+    method: 'POST',
+    body: { currentPassword, newPassword }
+  })
+}
+
 export async function uploadAvatar(file) {
   const token = getToken()
   const formData = new FormData()
@@ -569,5 +576,12 @@ export async function adminSetUserRole(userId, roleOrRoles) {
     return request('/admin/set-role', { method: 'POST', body: { userId, roles: roleOrRoles } })
   }
   return request('/admin/set-role', { method: 'POST', body: { userId, role: roleOrRoles } })
+}
+
+export async function adminResetUserPassword(userId, newPassword, revokeSessions = true) {
+  return request('/admin/reset-password', {
+    method: 'POST',
+    body: { userId, newPassword, revokeSessions: revokeSessions !== false }
+  })
 }
 

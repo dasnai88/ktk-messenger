@@ -2520,6 +2520,62 @@ app.get('/api/me', auth, ensureNotBanned, async (req, res) => {
   }
 })
 
+app.post('/api/me/change-password', auth, ensureNotBanned, async (req, res) => {
+  try {
+    const currentPassword = typeof req.body.currentPassword === 'string' ? req.body.currentPassword : ''
+    const newPassword = typeof req.body.newPassword === 'string' ? req.body.newPassword : ''
+
+    if (!isValidPassword(currentPassword)) {
+      return res.status(400).json({ error: 'Current password must be at least 6 characters' })
+    }
+    if (!isValidPassword(newPassword)) {
+      return res.status(400).json({ error: 'New password must be at least 6 characters' })
+    }
+    if (currentPassword === newPassword) {
+      return res.status(400).json({ error: 'New password must be different from current password' })
+    }
+
+    const userResult = await pool.query(
+      'select id, password_hash, is_banned from users where id = $1 limit 1',
+      [req.userId]
+    )
+    if (userResult.rowCount === 0) return res.status(404).json({ error: 'User not found' })
+    const userRow = userResult.rows[0]
+    if (userRow.is_banned === true) return res.status(403).json({ error: 'User is banned' })
+
+    const match = await bcrypt.compare(currentPassword, userRow.password_hash)
+    if (!match) {
+      return res.status(401).json({ error: 'Current password is incorrect' })
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 10)
+    await pool.query('update users set password_hash = $2 where id = $1', [req.userId, passwordHash])
+
+    let revokedCount = 0
+    try {
+      const revokeResult = await pool.query(
+        `update user_sessions
+         set revoked_at = now(),
+             revoke_reason = 'password_changed'
+         where user_id = $1
+           and revoked_at is null
+           and id <> $2`,
+        [req.userId, req.sessionId || null]
+      )
+      revokedCount = Number(revokeResult.rowCount || 0)
+    } catch (sessionErr) {
+      if (!isSecuritySchemaError(sessionErr)) {
+        throw sessionErr
+      }
+    }
+
+    res.json({ ok: true, revokedCount })
+  } catch (err) {
+    console.error('Change password error', err)
+    res.status(500).json({ error: 'Unexpected error' })
+  }
+})
+
 app.get('/api/me/sessions', auth, ensureNotBanned, async (req, res) => {
   try {
     const result = await pool.query(
@@ -6279,6 +6335,61 @@ app.post('/api/admin/moder', auth, adminOnly, async (req, res) => {
     res.json({ ok: true })
   } catch (err) {
     console.error('Moderator role error', err)
+    res.status(500).json({ error: 'Unexpected error' })
+  }
+})
+
+app.post('/api/admin/reset-password', auth, adminOnly, async (req, res) => {
+  try {
+    const userId = typeof req.body.userId === 'string' ? req.body.userId.trim() : ''
+    const newPassword = typeof req.body.newPassword === 'string' ? req.body.newPassword : ''
+    const revokeSessions = req.body.revokeSessions !== false
+
+    if (!isValidUuid(userId)) {
+      return res.status(400).json({ error: 'Invalid user id' })
+    }
+    if (!isValidPassword(newPassword)) {
+      return res.status(400).json({ error: 'New password must be at least 6 characters' })
+    }
+
+    const userResult = await pool.query(
+      'select id, username from users where id = $1 limit 1',
+      [userId]
+    )
+    if (userResult.rowCount === 0) {
+      return res.status(404).json({ error: 'User not found' })
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 10)
+    await pool.query('update users set password_hash = $2 where id = $1', [userId, passwordHash])
+
+    let revokedCount = 0
+    if (revokeSessions) {
+      try {
+        const revokeResult = await pool.query(
+          `update user_sessions
+           set revoked_at = now(),
+               revoke_reason = 'admin_password_reset'
+           where user_id = $1
+             and revoked_at is null`,
+          [userId]
+        )
+        revokedCount = Number(revokeResult.rowCount || 0)
+      } catch (sessionErr) {
+        if (!isSecuritySchemaError(sessionErr)) {
+          throw sessionErr
+        }
+      }
+    }
+
+    res.json({
+      ok: true,
+      userId,
+      username: userResult.rows[0].username,
+      revokedCount
+    })
+  } catch (err) {
+    console.error('Admin reset password error', err)
     res.status(500).json({ error: 'Unexpected error' })
   }
 })

@@ -34,6 +34,7 @@ import {
   uploadBanner,
   uploadProfileTrack,
   updateMe,
+  changeMyPassword,
   createMyVerificationRequest,
   cancelMyVerificationRequest,
   addComment,
@@ -53,6 +54,7 @@ import {
   adminReviewVerificationRequest,
   adminCreateRole,
   adminSetUserRole,
+  adminResetUserPassword,
   toggleSubscription,
   deleteProfileTrack,
   savePushSubscription,
@@ -1511,6 +1513,11 @@ export default function App() {
     role: 'student',
     themeColor: '#7a1f1d'
   })
+  const [passwordForm, setPasswordForm] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: ''
+  })
   const [status, setStatus] = useState({ type: 'info', message: '' })
   const [theme, setTheme] = useState(() => {
     if (typeof window === 'undefined') return 'dark'
@@ -1765,6 +1772,7 @@ export default function App() {
   const [adminQuery, setAdminQuery] = useState('')
   const [adminUsers, setAdminUsers] = useState([])
   const [adminWarnReason, setAdminWarnReason] = useState({})
+  const [adminResetPasswordByUser, setAdminResetPasswordByUser] = useState({})
   const [adminRoleDraft, setAdminRoleDraft] = useState({ value: '', label: '' })
   const [adminRoleByUser, setAdminRoleByUser] = useState({})
   const [adminVerificationRequests, setAdminVerificationRequests] = useState([])
@@ -5313,6 +5321,50 @@ export default function App() {
     }
   }
 
+  const handleChangePassword = async () => {
+    const currentPassword = String(passwordForm.currentPassword || '')
+    const newPassword = String(passwordForm.newPassword || '')
+    const confirmPassword = String(passwordForm.confirmPassword || '')
+
+    if (currentPassword.length < 6) {
+      setStatus({ type: 'error', message: 'Введите текущий пароль (минимум 6 символов).' })
+      return
+    }
+    if (newPassword.length < 6) {
+      setStatus({ type: 'error', message: 'Новый пароль должен быть минимум 6 символов.' })
+      return
+    }
+    if (newPassword !== confirmPassword) {
+      setStatus({ type: 'error', message: 'Подтверждение пароля не совпадает.' })
+      return
+    }
+    if (currentPassword === newPassword) {
+      setStatus({ type: 'error', message: 'Новый пароль должен отличаться от текущего.' })
+      return
+    }
+
+    setLoading(true)
+    try {
+      const data = await changeMyPassword(currentPassword, newPassword)
+      setPasswordForm({
+        currentPassword: '',
+        newPassword: '',
+        confirmPassword: ''
+      })
+      const revokedCount = Math.max(0, Number(data && data.revokedCount ? data.revokedCount : 0))
+      setStatus({
+        type: 'success',
+        message: revokedCount > 0
+          ? `Пароль изменён. Другие сессии завершены: ${revokedCount}.`
+          : 'Пароль изменён.'
+      })
+    } catch (err) {
+      setStatus({ type: 'error', message: err.message })
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const handleAvatarChange = async (event) => {
     const file = event.target.files && event.target.files[0]
     if (!file) return
@@ -6051,6 +6103,26 @@ export default function App() {
     }
   }
 
+  const handleAdminResetPasswordForUser = async (targetUser) => {
+    if (!targetUser || !targetUser.id) return
+    const nextPassword = String(adminResetPasswordByUser[targetUser.id] || '').trim()
+    if (nextPassword.length < 6) {
+      setStatus({ type: 'error', message: 'Новый пароль должен быть минимум 6 символов.' })
+      return
+    }
+    try {
+      const data = await adminResetUserPassword(targetUser.id, nextPassword, true)
+      setAdminResetPasswordByUser((prev) => ({ ...prev, [targetUser.id]: '' }))
+      const revokedCount = Math.max(0, Number(data && data.revokedCount ? data.revokedCount : 0))
+      setStatus({
+        type: 'success',
+        message: `Пароль @${targetUser.username} сброшен. Сессий завершено: ${revokedCount}.`
+      })
+    } catch (err) {
+      setStatus({ type: 'error', message: err.message })
+    }
+  }
+
   const toggleAdminRoleChoice = (userId, roleValue) => {
     if (!userId || !roleValue) return
     setAdminRoleByUser((prev) => {
@@ -6182,6 +6254,11 @@ export default function App() {
     setToken(null)
     setUser(null)
     setTwoFactorLogin({ ...INITIAL_TWO_FACTOR_LOGIN_STATE })
+    setPasswordForm({
+      currentPassword: '',
+      newPassword: '',
+      confirmPassword: ''
+    })
     setView('login')
     setActiveConversation(null)
     setChatMobilePane('list')
@@ -6221,6 +6298,10 @@ export default function App() {
     setVerificationRequest(null)
     setVerificationForm({ ...initialVerificationForm })
     setVerificationSubmitting(false)
+    setAdminUsers([])
+    setAdminWarnReason({})
+    setAdminResetPasswordByUser({})
+    setAdminRoleByUser({})
     setAdminVerificationRequests([])
     setAdminVerificationFilter('pending')
     setAdminVerificationLoading(false)
@@ -12090,6 +12171,25 @@ export default function App() {
                     >
                       {u.is_moderator ? 'Снять модер' : 'Назначить модер'}
                     </button>
+                    <div className="admin-inline-row admin-password-reset">
+                      <input
+                        type="password"
+                        value={adminResetPasswordByUser[u.id] || ''}
+                        onChange={(event) =>
+                          setAdminResetPasswordByUser((prev) => ({ ...prev, [u.id]: event.target.value }))
+                        }
+                        placeholder="New password (min 6)"
+                        minLength={6}
+                        autoComplete="new-password"
+                      />
+                      <button
+                        type="button"
+                        className="danger"
+                        onClick={() => handleAdminResetPasswordForUser(u)}
+                      >
+                        Reset password
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -12428,6 +12528,46 @@ export default function App() {
                   <span>Backup codes (save now): {freshBackupCodes.join(', ')}</span>
                 </div>
               )}
+            </section>
+            <section className="profile-verification-card">
+              <div className="profile-verification-head">
+                <h3>Password</h3>
+                <span className="verification-status-badge none">Manual</span>
+              </div>
+              <p className="profile-verification-text">
+                Change account password. Other active sessions will be revoked automatically.
+              </p>
+              <div className="profile-verification-form profile-password-form">
+                <input
+                  type="password"
+                  value={passwordForm.currentPassword}
+                  onChange={(event) => setPasswordForm((prev) => ({ ...prev, currentPassword: event.target.value }))}
+                  placeholder="Current password"
+                  minLength={6}
+                  autoComplete="current-password"
+                />
+                <input
+                  type="password"
+                  value={passwordForm.newPassword}
+                  onChange={(event) => setPasswordForm((prev) => ({ ...prev, newPassword: event.target.value }))}
+                  placeholder="New password"
+                  minLength={6}
+                  autoComplete="new-password"
+                />
+                <input
+                  type="password"
+                  value={passwordForm.confirmPassword}
+                  onChange={(event) => setPasswordForm((prev) => ({ ...prev, confirmPassword: event.target.value }))}
+                  placeholder="Confirm new password"
+                  minLength={6}
+                  autoComplete="new-password"
+                />
+                <div className="profile-verification-actions">
+                  <button type="button" className="primary" onClick={handleChangePassword} disabled={loading}>
+                    Change password
+                  </button>
+                </div>
+              </div>
             </section>
             <section className="profile-verification-card">
               <div className="profile-verification-head">
@@ -13345,6 +13485,7 @@ export default function App() {
     </div>
   )
 }
+
 
 
 
