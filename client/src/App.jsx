@@ -257,6 +257,8 @@ const PUSH_OPEN_STORAGE_KEY = 'ktk_push_open_conversation'
 const DRAFT_STORAGE_KEY = 'ktk_message_drafts'
 const FEED_BOOKMARKS_STORAGE_KEY = 'ktk_feed_bookmarks'
 const FEED_EXPLORER_STORAGE_KEY = 'ktk_feed_explorer_v1'
+const DASHBOARD_PREFERENCES_STORAGE_KEY = 'ktk_dashboard_preferences_v1'
+const DASHBOARD_COMMAND_HISTORY_STORAGE_KEY = 'ktk_dashboard_command_history_v1'
 const CHAT_WALLPAPER_STORAGE_KEY = 'ktk_chat_wallpapers'
 const CHAT_ALIAS_STORAGE_KEY = 'ktk_chat_aliases'
 const RECENT_STICKERS_STORAGE_KEY = 'ktk_recent_stickers'
@@ -1386,6 +1388,41 @@ export default function App() {
   const [isFeedInsightsOpen, setIsFeedInsightsOpen] = useState(false)
   const [dashboardFeedQuery, setDashboardFeedQuery] = useState('')
   const [dashboardRefreshLoading, setDashboardRefreshLoading] = useState(false)
+  const [dashboardCommandInput, setDashboardCommandInput] = useState('')
+  const [dashboardCommandHistory, setDashboardCommandHistory] = useState(() => {
+    if (typeof window === 'undefined') return []
+    try {
+      const parsed = JSON.parse(localStorage.getItem(DASHBOARD_COMMAND_HISTORY_STORAGE_KEY) || '[]')
+      if (!Array.isArray(parsed)) return []
+      return parsed
+        .map((item) => String(item || '').trim())
+        .filter(Boolean)
+        .slice(0, 10)
+    } catch (err) {
+      return []
+    }
+  })
+  const [dashboardPreferences, setDashboardPreferences] = useState(() => {
+    if (typeof window === 'undefined') {
+      return {
+        focusMode: false,
+        autoRefresh: false
+      }
+    }
+    try {
+      const parsed = JSON.parse(localStorage.getItem(DASHBOARD_PREFERENCES_STORAGE_KEY) || '{}')
+      return {
+        focusMode: parsed && parsed.focusMode === true,
+        autoRefresh: parsed && parsed.autoRefresh === true
+      }
+    } catch (err) {
+      return {
+        focusMode: false,
+        autoRefresh: false
+      }
+    }
+  })
+  const [dashboardLastRefreshAt, setDashboardLastRefreshAt] = useState(null)
   const [feedExplorer, setFeedExplorer] = useState(() => {
     try {
       const parsed = JSON.parse(localStorage.getItem(FEED_EXPLORER_STORAGE_KEY) || '{}')
@@ -1498,6 +1535,7 @@ export default function App() {
   const videoNoteDiscardRef = useRef(false)
   const videoNotePreviewRef = useRef(null)
   const messagePreviewUrlRef = useRef('')
+  const dashboardRefreshLoadingRef = useRef(false)
   const callStateRef = useRef(callState)
   const blockedUsersRef = useRef(blockedUsers)
   const conversationsRef = useRef(conversations)
@@ -2678,6 +2716,11 @@ export default function App() {
       time: now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
     }
   }, [messages.length, posts.length, conversations.length, unreadMessagesCount, socketConnection, view])
+  const dashboardFocusMode = dashboardPreferences.focusMode === true
+  const dashboardAutoRefresh = dashboardPreferences.autoRefresh === true
+  const dashboardLastRefreshLabel = dashboardLastRefreshAt
+    ? `${formatTime(dashboardLastRefreshAt)}`
+    : 'еще не обновлялось'
   const scrollChatToBottom = (behavior = 'auto') => {
     const container = chatMessagesRef.current
     if (!container) return
@@ -3935,6 +3978,28 @@ export default function App() {
 
   useEffect(() => {
     try {
+      localStorage.setItem(DASHBOARD_PREFERENCES_STORAGE_KEY, JSON.stringify({
+        focusMode: dashboardFocusMode,
+        autoRefresh: dashboardAutoRefresh
+      }))
+    } catch (err) {
+      // ignore storage errors
+    }
+  }, [dashboardFocusMode, dashboardAutoRefresh])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        DASHBOARD_COMMAND_HISTORY_STORAGE_KEY,
+        JSON.stringify(dashboardCommandHistory.slice(0, 10))
+      )
+    } catch (err) {
+      // ignore storage errors
+    }
+  }, [dashboardCommandHistory])
+
+  useEffect(() => {
+    try {
       localStorage.setItem(CHAT_WALLPAPER_STORAGE_KEY, JSON.stringify(chatWallpaperByConversation))
     } catch (err) {
       // ignore storage errors
@@ -4014,6 +4079,14 @@ export default function App() {
     const allowed = new Set(EMOJI_PICKER_ITEMS.map((item) => item.value))
     setRecentEmojiItems((prev) => prev.filter((emoji) => allowed.has(emoji)))
   }, [])
+
+  useEffect(() => {
+    if (!user || view !== 'dashboard' || !dashboardAutoRefresh) return
+    const timer = window.setInterval(() => {
+      refreshWorkspaceSnapshot()
+    }, 60000)
+    return () => window.clearInterval(timer)
+  }, [user ? user.id : null, view, dashboardAutoRefresh])
 
   useEffect(() => {
     const handleHotkey = (event) => {
@@ -5241,7 +5314,10 @@ export default function App() {
     setTrackArtist('')
     setTrackFile(null)
     setDashboardFeedQuery('')
+    dashboardRefreshLoadingRef.current = false
     setDashboardRefreshLoading(false)
+    setDashboardCommandInput('')
+    setDashboardLastRefreshAt(null)
     setFeedAuthorFilter('')
     setPushState((prev) => ({
       ...prev,
@@ -5859,7 +5935,8 @@ export default function App() {
   }
 
   const refreshWorkspaceSnapshot = async () => {
-    if (!user || dashboardRefreshLoading) return
+    if (!user || dashboardRefreshLoadingRef.current) return
+    dashboardRefreshLoadingRef.current = true
     setDashboardRefreshLoading(true)
     try {
       const [healthData, postsData, conversationsData, presenceData] = await Promise.all([
@@ -5886,12 +5963,125 @@ export default function App() {
         })
       }
       setOnlineUsers(Array.isArray(presenceData && presenceData.onlineUserIds) ? presenceData.onlineUserIds : [])
+      setDashboardLastRefreshAt(Date.now())
       setStatus({ type: 'success', message: 'Данные центра управления обновлены.' })
     } catch (err) {
       setStatus({ type: 'error', message: err.message || 'Не удалось обновить данные центра управления.' })
     } finally {
+      dashboardRefreshLoadingRef.current = false
       setDashboardRefreshLoading(false)
     }
+  }
+
+  const updateDashboardPreferences = (patch) => {
+    if (!patch || typeof patch !== 'object') return
+    setDashboardPreferences((prev) => ({
+      ...prev,
+      ...(patch.focusMode !== undefined ? { focusMode: patch.focusMode === true } : {}),
+      ...(patch.autoRefresh !== undefined ? { autoRefresh: patch.autoRefresh === true } : {})
+    }))
+  }
+
+  const toggleDashboardFocusMode = () => {
+    updateDashboardPreferences({ focusMode: !dashboardFocusMode })
+  }
+
+  const toggleDashboardAutoRefresh = () => {
+    updateDashboardPreferences({ autoRefresh: !dashboardAutoRefresh })
+  }
+
+  const pushDashboardCommand = (value) => {
+    const normalized = String(value || '').trim()
+    if (!normalized) return
+    setDashboardCommandHistory((prev) => {
+      const next = [normalized, ...prev.filter((item) => item !== normalized)]
+      return next.slice(0, 10)
+    })
+  }
+
+  const runDashboardCommand = (rawValue) => {
+    const source = String(rawValue || '').trim()
+    if (!source) {
+      setStatus({ type: 'info', message: 'Введите команду или запрос.' })
+      return
+    }
+    const value = source.toLowerCase()
+    pushDashboardCommand(source)
+
+    if (value.startsWith('#')) {
+      openFeedFocus({ filter: FEED_FILTERS.all, sortMode: FEED_SORT_MODES.smart, tag: value })
+      setDashboardCommandInput('')
+      return
+    }
+
+    if (value.startsWith('@')) {
+      openFeedFocus({ filter: FEED_FILTERS.all, sortMode: FEED_SORT_MODES.smart, query: value.slice(1) })
+      setDashboardCommandInput('')
+      return
+    }
+
+    if (value === 'unread' || value === 'непрочитанные' || value === 'непроч') {
+      runDashboardFocusAction('unread')
+      setDashboardCommandInput('')
+      return
+    }
+    if (value === 'drafts' || value === 'черновики') {
+      runDashboardFocusAction('drafts')
+      setDashboardCommandInput('')
+      return
+    }
+    if (value === 'hot' || value === 'хайп' || value === 'горячее') {
+      runDashboardFocusAction('feed-hot')
+      setDashboardCommandInput('')
+      return
+    }
+    if (value === 'mine' || value === 'мои') {
+      openFeedFocus({ filter: FEED_FILTERS.mine, sortMode: FEED_SORT_MODES.latest })
+      setDashboardCommandInput('')
+      return
+    }
+    if (value === 'bookmarks' || value === 'закладки') {
+      openFeedFocus({ filter: FEED_FILTERS.bookmarks })
+      setDashboardCommandInput('')
+      return
+    }
+    if (value === 'profile' || value === 'профиль') {
+      setView('profile')
+      setDashboardCommandInput('')
+      return
+    }
+    if (value === 'feed' || value === 'лента') {
+      setView('feed')
+      setDashboardCommandInput('')
+      return
+    }
+    if (value === 'chats' || value === 'чаты') {
+      setView('chats')
+      setDashboardCommandInput('')
+      return
+    }
+    if (value === 'refresh' || value === 'обновить') {
+      refreshWorkspaceSnapshot()
+      setDashboardCommandInput('')
+      return
+    }
+    if (value === 'push') {
+      syncPushState({ keepError: true }).catch(() => {})
+      setDashboardCommandInput('')
+      return
+    }
+    if (value === 'admin' && user && user.isAdmin) {
+      setView('admin')
+      setDashboardCommandInput('')
+      return
+    }
+
+    openFeedFocus({
+      filter: FEED_FILTERS.all,
+      sortMode: FEED_SORT_MODES.smart,
+      query: source
+    })
+    setDashboardCommandInput('')
   }
 
   const applyFeedQuickPreset = (preset) => {
@@ -7210,9 +7400,25 @@ export default function App() {
               <div>
                 <div className="dashboard-kicker">Центр управления</div>
                 <h2>Рабочая панель</h2>
-                <p>{dashboardNow.date} • {dashboardNow.time}</p>
+                <p>{dashboardNow.date} • {dashboardNow.time} • обновлено: {dashboardLastRefreshLabel}</p>
               </div>
               <div className="dashboard-functional-head-actions">
+                <div className="dashboard-functional-toggle-row">
+                  <button
+                    type="button"
+                    className={`dashboard-mode-toggle ${dashboardFocusMode ? 'active' : ''}`.trim()}
+                    onClick={toggleDashboardFocusMode}
+                  >
+                    {dashboardFocusMode ? 'Фокус: ON' : 'Фокус: OFF'}
+                  </button>
+                  <button
+                    type="button"
+                    className={`dashboard-mode-toggle ${dashboardAutoRefresh ? 'active' : ''}`.trim()}
+                    onClick={toggleDashboardAutoRefresh}
+                  >
+                    {dashboardAutoRefresh ? 'Автообновление: ON' : 'Автообновление: OFF'}
+                  </button>
+                </div>
                 <div className="dashboard-functional-status">
                   <span className={`dashboard-functional-chip ${socketConnection === 'connected' ? 'state-ok' : socketConnection === 'connecting' ? 'state-warn' : 'state-danger'}`.trim()}>
                     Realtime: {socketConnection === 'connected' ? 'ON' : socketConnection === 'connecting' ? '...' : 'OFF'}
@@ -7230,7 +7436,47 @@ export default function App() {
               </div>
             </section>
 
-            <div className="dashboard-functional-grid">
+            <section className="dashboard-command-deck">
+              <div className="dashboard-card-head">
+                <div>
+                  <strong>Командная строка</strong>
+                  <span>команды: unread, drafts, hot, mine, bookmarks, profile, chats, feed, refresh, push, #тег, @автор</span>
+                </div>
+              </div>
+              <div className="dashboard-command-row">
+                <input
+                  type="text"
+                  value={dashboardCommandInput}
+                  onChange={(event) => setDashboardCommandInput(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault()
+                      runDashboardCommand(dashboardCommandInput)
+                    }
+                  }}
+                  placeholder="Введите команду или поисковый запрос..."
+                />
+                <button type="button" className="primary" onClick={() => runDashboardCommand(dashboardCommandInput)}>
+                  Выполнить
+                </button>
+              </div>
+              {dashboardCommandHistory.length > 0 && (
+                <div className="dashboard-command-history">
+                  {dashboardCommandHistory.map((item) => (
+                    <button
+                      key={`dashboard-command-${item}`}
+                      type="button"
+                      className="ghost"
+                      onClick={() => runDashboardCommand(item)}
+                    >
+                      {item}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </section>
+
+            <div className={`dashboard-functional-grid ${dashboardFocusMode ? 'focus-mode' : ''}`.trim()}>
               <article className="dashboard-functional-card">
                 <div className="dashboard-card-head">
                   <div>
@@ -7266,82 +7512,84 @@ export default function App() {
                 </div>
               </article>
 
-              <article className="dashboard-functional-card">
-                <div className="dashboard-card-head">
-                  <div>
-                    <strong>Лента</strong>
-                    <span>поиск, фильтры и тренды</span>
+              {!dashboardFocusMode && (
+                <article className="dashboard-functional-card">
+                  <div className="dashboard-card-head">
+                    <div>
+                      <strong>Лента</strong>
+                      <span>поиск, фильтры и тренды</span>
+                    </div>
                   </div>
-                </div>
-                <div className="dashboard-functional-search">
-                  <input
-                    type="text"
-                    value={dashboardFeedQuery}
-                    onChange={(event) => setDashboardFeedQuery(normalizeFeedQueryValue(event.target.value))}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter') {
-                        event.preventDefault()
-                        openDashboardFeedSearch()
-                      }
-                    }}
-                    placeholder="Поиск по постам, авторам и тегам"
-                  />
-                  <button type="button" className="primary" onClick={openDashboardFeedSearch}>Искать</button>
-                </div>
-                <div className="dashboard-functional-preset-row">
-                  <button type="button" className="ghost" onClick={() => openFeedFocus({ filter: FEED_FILTERS.all, sortMode: FEED_SORT_MODES.smart })}>
-                    Smart
-                  </button>
-                  <button type="button" className="ghost" onClick={() => openFeedFocus({ filter: FEED_FILTERS.all, sortMode: FEED_SORT_MODES.latest })}>
-                    Новые
-                  </button>
-                  <button type="button" className="ghost" onClick={() => openFeedFocus({ filter: FEED_FILTERS.popular, sortMode: FEED_SORT_MODES.engagement, timeWindow: FEED_TIME_WINDOWS.week })}>
-                    Хайп
-                  </button>
-                  <button type="button" className="ghost" onClick={() => openFeedFocus({ filter: FEED_FILTERS.mine, sortMode: FEED_SORT_MODES.latest })}>
-                    Мои
-                  </button>
-                  <button type="button" className="ghost" onClick={() => setDashboardFeedQuery('')}>
-                    Очистить
-                  </button>
-                </div>
-                {trendingTags.length > 0 && (
-                  <div className="dashboard-functional-tags">
-                    {trendingTags.slice(0, 6).map((tag) => (
-                      <button
-                        key={`dashboard-tag-${tag.tag}`}
-                        type="button"
-                        className="dashboard-tag-pill"
-                        onClick={() => openFeedFocus({ filter: FEED_FILTERS.all, sortMode: FEED_SORT_MODES.smart, tag: tag.tag })}
-                      >
-                        {tag.tag} <span>{tag.count}</span>
-                      </button>
-                    ))}
+                  <div className="dashboard-functional-search">
+                    <input
+                      type="text"
+                      value={dashboardFeedQuery}
+                      onChange={(event) => setDashboardFeedQuery(normalizeFeedQueryValue(event.target.value))}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter') {
+                          event.preventDefault()
+                          openDashboardFeedSearch()
+                        }
+                      }}
+                      placeholder="Поиск по постам, авторам и тегам"
+                    />
+                    <button type="button" className="primary" onClick={openDashboardFeedSearch}>Искать</button>
                   </div>
-                )}
-                <div className="dashboard-functional-list">
-                  {hotFeedPosts.length === 0 ? (
-                    <div className="empty small">Горячих постов пока нет.</div>
-                  ) : (
-                    hotFeedPosts.slice(0, 5).map((item) => (
-                      <button
-                        key={`dashboard-hot-${item.post.id}`}
-                        type="button"
-                        className="dashboard-functional-row-main"
-                        onClick={() => openFeedFocus({
-                          filter: FEED_FILTERS.all,
-                          sortMode: FEED_SORT_MODES.engagement,
-                          timeWindow: FEED_TIME_WINDOWS.week,
-                          query: item.post.author && item.post.author.username ? item.post.author.username : ''
-                        })}
-                      >
-                        <strong>{item.post.author.displayName || item.post.author.username}</strong>
-                        <span>{item.score} очк.</span>
-                      </button>
-                    ))
+                  <div className="dashboard-functional-preset-row">
+                    <button type="button" className="ghost" onClick={() => openFeedFocus({ filter: FEED_FILTERS.all, sortMode: FEED_SORT_MODES.smart })}>
+                      Smart
+                    </button>
+                    <button type="button" className="ghost" onClick={() => openFeedFocus({ filter: FEED_FILTERS.all, sortMode: FEED_SORT_MODES.latest })}>
+                      Новые
+                    </button>
+                    <button type="button" className="ghost" onClick={() => openFeedFocus({ filter: FEED_FILTERS.popular, sortMode: FEED_SORT_MODES.engagement, timeWindow: FEED_TIME_WINDOWS.week })}>
+                      Хайп
+                    </button>
+                    <button type="button" className="ghost" onClick={() => openFeedFocus({ filter: FEED_FILTERS.mine, sortMode: FEED_SORT_MODES.latest })}>
+                      Мои
+                    </button>
+                    <button type="button" className="ghost" onClick={() => setDashboardFeedQuery('')}>
+                      Очистить
+                    </button>
+                  </div>
+                  {trendingTags.length > 0 && (
+                    <div className="dashboard-functional-tags">
+                      {trendingTags.slice(0, 6).map((tag) => (
+                        <button
+                          key={`dashboard-tag-${tag.tag}`}
+                          type="button"
+                          className="dashboard-tag-pill"
+                          onClick={() => openFeedFocus({ filter: FEED_FILTERS.all, sortMode: FEED_SORT_MODES.smart, tag: tag.tag })}
+                        >
+                          {tag.tag} <span>{tag.count}</span>
+                        </button>
+                      ))}
+                    </div>
                   )}
-                </div>
-              </article>
+                  <div className="dashboard-functional-list">
+                    {hotFeedPosts.length === 0 ? (
+                      <div className="empty small">Горячих постов пока нет.</div>
+                    ) : (
+                      hotFeedPosts.slice(0, 5).map((item) => (
+                        <button
+                          key={`dashboard-hot-${item.post.id}`}
+                          type="button"
+                          className="dashboard-functional-row-main"
+                          onClick={() => openFeedFocus({
+                            filter: FEED_FILTERS.all,
+                            sortMode: FEED_SORT_MODES.engagement,
+                            timeWindow: FEED_TIME_WINDOWS.week,
+                            query: item.post.author && item.post.author.username ? item.post.author.username : ''
+                          })}
+                        >
+                          <strong>{item.post.author.displayName || item.post.author.username}</strong>
+                          <span>{item.score} очк.</span>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </article>
+              )}
 
               <article className="dashboard-functional-card">
                 <div className="dashboard-card-head">
@@ -7398,57 +7646,59 @@ export default function App() {
                 )}
               </article>
 
-              <article className="dashboard-functional-card">
-                <div className="dashboard-card-head">
-                  <div>
-                    <strong>Система</strong>
-                    <span>сигналы и сервис</span>
+              {!dashboardFocusMode && (
+                <article className="dashboard-functional-card">
+                  <div className="dashboard-card-head">
+                    <div>
+                      <strong>Система</strong>
+                      <span>сигналы и сервис</span>
+                    </div>
                   </div>
-                </div>
-                <div className="dashboard-system-grid">
-                  <article className="dashboard-system-item">
-                    <span>Онлайн</span>
-                    <strong>{onlineUsers.length}</strong>
-                  </article>
-                  <article className="dashboard-system-item">
-                    <span>Непрочитанные</span>
-                    <strong>{unreadMessagesCount}</strong>
-                  </article>
-                  <article className="dashboard-system-item">
-                    <span>Блокировки</span>
-                    <strong>{blockedUsers.length}</strong>
-                  </article>
-                  <article className="dashboard-system-item">
-                    <span>Push ошибка</span>
-                    <strong>{pushState.error ? 'Есть' : 'Нет'}</strong>
-                  </article>
-                </div>
-                <div className="dashboard-shortcut-row">
-                  <button type="button" className="ghost" onClick={() => syncPushState({ keepError: true }).catch(() => {})}>
-                    Синхронизировать push
-                  </button>
-                  <button type="button" className="ghost" onClick={() => setView('feed')}>
-                    Открыть ленту
-                  </button>
-                  {activeConversation && (
-                    <button type="button" className="ghost" onClick={() => openConversationFromDashboard(activeConversation)}>
-                      В текущий чат
+                  <div className="dashboard-system-grid">
+                    <article className="dashboard-system-item">
+                      <span>Онлайн</span>
+                      <strong>{onlineUsers.length}</strong>
+                    </article>
+                    <article className="dashboard-system-item">
+                      <span>Непрочитанные</span>
+                      <strong>{unreadMessagesCount}</strong>
+                    </article>
+                    <article className="dashboard-system-item">
+                      <span>Блокировки</span>
+                      <strong>{blockedUsers.length}</strong>
+                    </article>
+                    <article className="dashboard-system-item">
+                      <span>Push ошибка</span>
+                      <strong>{pushState.error ? 'Есть' : 'Нет'}</strong>
+                    </article>
+                  </div>
+                  <div className="dashboard-shortcut-row">
+                    <button type="button" className="ghost" onClick={() => syncPushState({ keepError: true }).catch(() => {})}>
+                      Синхронизировать push
                     </button>
-                  )}
-                </div>
-                {dashboardSystemAlerts.length > 0 ? (
-                  <div className="dashboard-alerts-stack">
-                    {dashboardSystemAlerts.slice(0, 3).map((alert) => (
-                      <div key={`dashboard-alert-${alert.id}`} className={`dashboard-alert-card level-${alert.level}`.trim()}>
-                        <strong>{alert.title}</strong>
-                        <span>{alert.text}</span>
-                      </div>
-                    ))}
+                    <button type="button" className="ghost" onClick={() => setView('feed')}>
+                      Открыть ленту
+                    </button>
+                    {activeConversation && (
+                      <button type="button" className="ghost" onClick={() => openConversationFromDashboard(activeConversation)}>
+                        В текущий чат
+                      </button>
+                    )}
                   </div>
-                ) : (
-                  <div className="dashboard-functional-note">Система стабильна. Критичных сигналов нет.</div>
-                )}
-              </article>
+                  {dashboardSystemAlerts.length > 0 ? (
+                    <div className="dashboard-alerts-stack">
+                      {dashboardSystemAlerts.slice(0, 3).map((alert) => (
+                        <div key={`dashboard-alert-${alert.id}`} className={`dashboard-alert-card level-${alert.level}`.trim()}>
+                          <strong>{alert.title}</strong>
+                          <span>{alert.text}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="dashboard-functional-note">Система стабильна. Критичных сигналов нет.</div>
+                  )}
+                </article>
+              )}
             </div>
           </div>
         )}
