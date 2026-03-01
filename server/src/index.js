@@ -78,6 +78,48 @@ const verificationRequestReasonMaxLength = 360
 const verificationRequestEvidenceMaxLength = 220
 const verificationRequestAdminNoteMaxLength = 260
 const verificationRequestStatuses = new Set(['pending', 'approved', 'rejected', 'cancelled'])
+const jwtVerifyOptions = { algorithms: ['HS256'] }
+const blockedUploadExtensions = new Set([
+  '.html',
+  '.htm',
+  '.xhtml',
+  '.svg',
+  '.xml',
+  '.js',
+  '.mjs',
+  '.cjs',
+  '.json',
+  '.map',
+  '.wasm',
+  '.php',
+  '.phtml',
+  '.exe',
+  '.dll',
+  '.msi',
+  '.bat',
+  '.cmd',
+  '.sh'
+])
+const safeDiskUploadExtensions = new Set([
+  '.jpg',
+  '.jpeg',
+  '.png',
+  '.webp',
+  '.gif',
+  '.mp3',
+  '.wav',
+  '.ogg',
+  '.webm',
+  '.m4a',
+  '.aac',
+  '.mp4',
+  '.ogv',
+  '.mov',
+  '.m4v',
+  '.mkv',
+  '.3gp',
+  '.3g2'
+])
 const PERSONAL_FAVORITES_TITLE = 'РР·Р±СЂР°РЅРЅРѕРµ'
 
 if (webPushEnabled) {
@@ -96,7 +138,9 @@ if (!useDbStorage) {
 const diskStorage = multer.diskStorage({
   destination: uploadDir,
   filename: (req, file, cb) => {
-    const safeName = `${Date.now()}-${Math.random().toString(16).slice(2)}${path.extname(file.originalname)}`
+    const originalExt = path.extname(file.originalname || '').toLowerCase()
+    const safeExt = safeDiskUploadExtensions.has(originalExt) ? originalExt : ''
+    const safeName = `${Date.now()}-${Math.random().toString(16).slice(2)}${safeExt}`
     cb(null, safeName)
   }
 })
@@ -122,6 +166,9 @@ function createUpload({
     limits: { fileSize: maxFileSizeMb * 1024 * 1024, files: 1 },
     fileFilter: (req, file, cb) => {
       const ext = path.extname(file.originalname || '').toLowerCase()
+      if (ext && blockedUploadExtensions.has(ext)) {
+        return cb(new Error(errorMessage))
+      }
       const rawMime = String(file.mimetype || '').trim().toLowerCase()
       const mime = rawMime.split(';')[0]
       const mimeAllowed = allowedMimeTypes.has(rawMime) || allowedMimeTypes.has(mime)
@@ -192,7 +239,6 @@ const messageUpload = createUpload({
   allowWithoutExtension: true,
   allowOctetStreamByExtension: true,
   mimePrefixes: ['image/', 'video/'],
-  allowAnyExtensionWhenMimePrefix: true,
   allowUnknownMimeByExtension: true
 })
 
@@ -203,13 +249,18 @@ const allowedOrigins = rawOrigins
   .filter(Boolean)
 const allowAllOrigins = allowedOrigins.includes('*')
 
+function isAllowedCorsOrigin(origin) {
+  if (!origin || allowAllOrigins) return true
+  return allowedOrigins.includes(origin)
+}
+
 const corsOptions = {
   origin: (origin, callback) => {
-    if (!origin || allowAllOrigins) return callback(null, true)
-    if (allowedOrigins.includes(origin)) return callback(null, true)
+    if (isAllowedCorsOrigin(origin)) return callback(null, true)
     return callback(new Error('Not allowed by CORS'))
   },
-  credentials: true
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']
 }
 
 const apiLimiter = rateLimit({
@@ -243,9 +294,13 @@ const messageLimiter = rateLimit({
 
 const io = new Server(server, {
   cors: {
-    origin: allowAllOrigins ? '*' : allowedOrigins,
+    origin: (origin, callback) => {
+      if (isAllowedCorsOrigin(origin)) return callback(null, true)
+      return callback(new Error('Not allowed by CORS'))
+    },
     credentials: true
-  }
+  },
+  maxHttpBufferSize: 1e6
 })
 
 const onlineUsers = new Map() // userId => Set(socketId)
@@ -283,7 +338,20 @@ app.use(express.urlencoded({ extended: false, limit: '50kb' }))
 app.use('/api', apiLimiter)
 app.use('/api/auth', authLimiter)
 if (!useDbStorage) {
-  app.use('/uploads', express.static(uploadDir))
+  app.use('/uploads', express.static(uploadDir, {
+    dotfiles: 'deny',
+    fallthrough: false,
+    maxAge: '7d',
+    immutable: true,
+    setHeaders: (res) => {
+      res.setHeader('X-Content-Type-Options', 'nosniff')
+      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin')
+      res.setHeader(
+        'Content-Security-Policy',
+        "default-src 'none'; img-src 'self' data: blob:; media-src 'self' data: blob:; style-src 'none'; script-src 'none'; object-src 'none'; frame-ancestors 'none'"
+      )
+    }
+  }))
 }
 
 function normalizeLogin(value) {
@@ -393,15 +461,24 @@ if (useDbStorage) {
 }
 
 function signToken(userId) {
-  return jwt.sign({ sub: userId }, jwtSecret, { expiresIn: '7d' })
+  return jwt.sign({ sub: userId }, jwtSecret, { expiresIn: '7d', algorithm: 'HS256' })
+}
+
+function extractJwtToken(rawValue) {
+  const value = String(rawValue || '').trim()
+  if (!value) return ''
+  const bearerMatch = /^Bearer\s+(.+)$/i.exec(value)
+  const token = String(bearerMatch ? bearerMatch[1] : value).trim()
+  if (!token || token.length > 2048) return ''
+  if (!/^[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+$/.test(token)) return ''
+  return token
 }
 
 function auth(req, res, next) {
-  const header = req.headers.authorization || ''
-  const token = header.startsWith('Bearer ') ? header.slice(7) : null
+  const token = extractJwtToken(req.headers.authorization)
   if (!token) return res.status(401).json({ error: 'No token' })
   try {
-    const payload = jwt.verify(token, jwtSecret)
+    const payload = jwt.verify(token, jwtSecret, jwtVerifyOptions)
     req.userId = payload.sub
     return next()
   } catch (err) {
@@ -1653,10 +1730,10 @@ async function sendPushToUsers(userIds, payload) {
 }
 
 io.use((socket, next) => {
-  const token = socket.handshake.auth && socket.handshake.auth.token
+  const token = extractJwtToken(socket.handshake.auth && socket.handshake.auth.token)
   if (!token) return next(new Error('No token'))
   try {
-    const payload = jwt.verify(token, jwtSecret)
+    const payload = jwt.verify(token, jwtSecret, jwtVerifyOptions)
     socket.userId = payload.sub
     return next()
   } catch (err) {
