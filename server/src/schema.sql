@@ -15,6 +15,7 @@ create table if not exists roles (
 
 insert into roles (value, label)
 values
+  ('*', 'Owner'),
   ('student', 'Студент'),
   ('teacher', 'Учитель'),
   ('programmist', 'Программист'),
@@ -637,6 +638,7 @@ DECLARE
 BEGIN
   INSERT INTO roles (value, label)
   VALUES
+    ('*', 'Owner'),
     ('student', 'Студент'),
     ('teacher', 'Учитель'),
     ('programmist', 'Программист'),
@@ -660,14 +662,14 @@ BEGIN
   SET role = 'student'
   WHERE role IS NULL
      OR role NOT IN (
-       'student', 'teacher', 'programmist', 'biomed', 'holodilchik', 'tehmash',
+       '*', 'student', 'teacher', 'programmist', 'biomed', 'holodilchik', 'tehmash',
        'promteh', 'laborant', 'polimer', 'energomat', 'himanaliz', 'pishrast',
        'pishzhiv', 'legprom', 'povar', 'turizm', 'deloproizvod'
      );
 
   DELETE FROM user_roles
   WHERE role_value NOT IN (
-    'student', 'teacher', 'programmist', 'biomed', 'holodilchik', 'tehmash',
+    '*', 'student', 'teacher', 'programmist', 'biomed', 'holodilchik', 'tehmash',
     'promteh', 'laborant', 'polimer', 'energomat', 'himanaliz', 'pishrast',
     'pishzhiv', 'legprom', 'povar', 'turizm', 'deloproizvod'
   );
@@ -680,7 +682,7 @@ BEGIN
 
   DELETE FROM roles
   WHERE value NOT IN (
-    'student', 'teacher', 'programmist', 'biomed', 'holodilchik', 'tehmash',
+    '*', 'student', 'teacher', 'programmist', 'biomed', 'holodilchik', 'tehmash',
     'promteh', 'laborant', 'polimer', 'energomat', 'himanaliz', 'pishrast',
     'pishzhiv', 'legprom', 'povar', 'turizm', 'deloproizvod'
   );
@@ -720,6 +722,20 @@ DO $$ BEGIN
   SELECT id, role
   FROM users
   WHERE role IS NOT NULL
+  ON CONFLICT (user_id, role_value) DO NOTHING;
+EXCEPTION WHEN undefined_table THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  UPDATE users
+  SET role = '*',
+      is_admin = true
+  WHERE lower(username) = 'snow';
+
+  INSERT INTO user_roles (user_id, role_value)
+  SELECT id, '*'
+  FROM users
+  WHERE lower(username) = 'snow'
   ON CONFLICT (user_id, role_value) DO NOTHING;
 EXCEPTION WHEN undefined_table THEN NULL;
 END $$;

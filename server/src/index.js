@@ -19,6 +19,7 @@ const app = express()
 const server = http.createServer(app)
 
 const defaultRoles = [
+  { value: '*', label: 'Owner' },
   { value: 'student', label: 'РЎС‚СѓРґРµРЅС‚' },
   { value: 'teacher', label: 'РЈС‡РёС‚РµР»СЊ' },
   { value: 'programmist', label: 'РџСЂРѕРіСЂР°РјРјРёСЃС‚' },
@@ -37,6 +38,7 @@ const defaultRoles = [
   { value: 'turizm', label: 'РўСѓСЂРёР·Рј' },
   { value: 'deloproizvod', label: 'Р”РµР»РѕРїСЂРѕРёР·РІРѕРґ' }
 ]
+const ownerRoleValue = '*'
 const allowedRoleValues = new Set(defaultRoles.map((item) => item.value))
 
 const jwtSecret = process.env.JWT_SECRET || 'change_me'
@@ -722,9 +724,22 @@ async function ensureNotBanned(req, res, next) {
 
 async function adminOnly(req, res, next) {
   try {
-    const result = await pool.query('select is_admin, is_moderator from users where id = $1', [req.userId])
-    if (result.rowCount === 0) return res.status(401).json({ error: 'User not found' })
-    if (!result.rows[0].is_admin) return res.status(403).json({ error: 'Admin only' })
+    const access = await getUserAccessFlags(req.userId)
+    if (!access.exists) return res.status(401).json({ error: 'User not found' })
+    if (!access.isAdmin) return res.status(403).json({ error: 'Admin only' })
+    req.accessFlags = access
+    return next()
+  } catch (err) {
+    return res.status(500).json({ error: 'Unexpected error' })
+  }
+}
+
+async function ownerOnly(req, res, next) {
+  try {
+    const access = await getUserAccessFlags(req.userId)
+    if (!access.exists) return res.status(401).json({ error: 'User not found' })
+    if (!access.isOwner) return res.status(403).json({ error: 'Owner only' })
+    req.accessFlags = access
     return next()
   } catch (err) {
     return res.status(500).json({ error: 'Unexpected error' })
@@ -762,6 +777,7 @@ function normalizeVerificationRequestAdminNote(value) {
 }
 
 function isValidRoleValue(roleValue) {
+  if (roleValue === ownerRoleValue) return true
   return /^[a-z][a-z0-9_]{2,31}$/.test(roleValue)
 }
 
@@ -857,6 +873,98 @@ function normalizeUserRolesFromRow(row) {
   return single ? [single] : []
 }
 
+function hasRoleValueInRow(row, roleValue) {
+  const normalizedRoleValue = normalizeRoleValue(roleValue)
+  if (!normalizedRoleValue || !row || typeof row !== 'object') return false
+  const roles = normalizeUserRolesFromRow(row)
+  if (roles.includes(normalizedRoleValue)) return true
+  return normalizeRoleValue(row.role) === normalizedRoleValue
+}
+
+async function getUserAccessFlags(userId, dbClient = null) {
+  const db = dbClient || pool
+  if (!isValidUuid(userId)) {
+    return { exists: false, isAdmin: false, isOwner: false }
+  }
+  try {
+    const result = await db.query(
+      `select u.id,
+              u.is_admin,
+              u.role,
+              coalesce(
+                (select array_agg(ur.role_value order by ur.role_value asc)
+                 from user_roles ur
+                 where ur.user_id = u.id),
+                array[u.role]
+              ) as roles
+       from users u
+       where u.id = $1
+       limit 1`,
+      [userId]
+    )
+    if (result.rowCount === 0) {
+      return { exists: false, isAdmin: false, isOwner: false }
+    }
+    const row = result.rows[0]
+    const isOwner = hasRoleValueInRow(row, ownerRoleValue)
+    return {
+      exists: true,
+      isAdmin: row.is_admin === true || isOwner,
+      isOwner
+    }
+  } catch (err) {
+    if (!(err && err.code === '42P01')) {
+      throw err
+    }
+  }
+  const fallback = await db.query(
+    'select id, is_admin, role from users where id = $1 limit 1',
+    [userId]
+  )
+  if (fallback.rowCount === 0) {
+    return { exists: false, isAdmin: false, isOwner: false }
+  }
+  const row = fallback.rows[0]
+  const isOwner = normalizeRoleValue(row.role) === ownerRoleValue
+  return {
+    exists: true,
+    isAdmin: row.is_admin === true || isOwner,
+    isOwner
+  }
+}
+
+async function hasAdminAccess(userId, dbClient = null) {
+  const access = await getUserAccessFlags(userId, dbClient)
+  return access.exists && access.isAdmin
+}
+
+async function isOwnerAccount(userId, dbClient = null) {
+  const access = await getUserAccessFlags(userId, dbClient)
+  return access.exists && access.isOwner
+}
+
+async function ensureActorCanManageTarget(actorUserId, targetUserId, dbClient = null) {
+  const db = dbClient || pool
+  const [actorAccess, targetAccess] = await Promise.all([
+    getUserAccessFlags(actorUserId, db),
+    getUserAccessFlags(targetUserId, db)
+  ])
+  if (!actorAccess.exists) {
+    return { ok: false, status: 401, error: 'User not found' }
+  }
+  if (!targetAccess.exists) {
+    return { ok: false, status: 404, error: 'User not found' }
+  }
+  if (targetAccess.isOwner && !actorAccess.isOwner) {
+    return { ok: false, status: 403, error: 'Only owner can manage owner account' }
+  }
+  return {
+    ok: true,
+    actorAccess,
+    targetAccess
+  }
+}
+
 async function saveUserRoles(userId, roleValues, dbClient = null) {
   const normalized = normalizeRoleValues(roleValues)
   if (normalized.length === 0) {
@@ -897,6 +1005,8 @@ app.param('id', (req, res, next, id) => {
 function mapUser(row) {
   const roles = normalizeUserRolesFromRow(row)
   const primaryRole = row.role || roles[0] || ''
+  const isOwner = roles.includes(ownerRoleValue) || normalizeRoleValue(primaryRole) === ownerRoleValue
+  const isAdmin = row.is_admin === true || isOwner
   return {
     id: row.id,
     login: row.login,
@@ -911,7 +1021,8 @@ function mapUser(row) {
     bannerUrl: row.banner_url,
     themeColor: row.theme_color,
     isVerified: row.is_verified === true,
-    isAdmin: row.is_admin,
+    isOwner,
+    isAdmin,
     isModerator: row.is_moderator,
     isBanned: row.is_banned,
     twoFactorEnabled: row.two_factor_enabled === true,
@@ -1262,14 +1373,9 @@ async function isTeacherAccount(userId, dbClient = null) {
 
 async function isTwoFactorEligibleForUser(userId, dbClient = null) {
   const db = dbClient || pool
-  const userResult = await db.query(
-    'select id, is_admin, role from users where id = $1 limit 1',
-    [userId]
-  )
-  if (userResult.rowCount === 0) return false
-  const row = userResult.rows[0]
-  if (row.is_admin === true) return true
-  if (String(row.role || '').trim().toLowerCase() === 'teacher') return true
+  const access = await getUserAccessFlags(userId, db)
+  if (!access.exists) return false
+  if (access.isAdmin) return true
   return isTeacherAccount(userId, db)
 }
 
@@ -2807,7 +2913,7 @@ app.post('/api/me/2fa/setup', auth, ensureNotBanned, async (req, res) => {
   try {
     const eligible = await isTwoFactorEligibleForUser(req.userId)
     if (!eligible) {
-      return res.status(403).json({ error: '2FA setup is available only for admins and teachers' })
+      return res.status(403).json({ error: '2FA setup is available only for admins, owners and teachers' })
     }
 
     const userResult = await pool.query(
@@ -2858,7 +2964,7 @@ app.post('/api/me/2fa/enable', auth, ensureNotBanned, async (req, res) => {
     }
     const eligible = await isTwoFactorEligibleForUser(req.userId)
     if (!eligible) {
-      return res.status(403).json({ error: '2FA setup is available only for admins and teachers' })
+      return res.status(403).json({ error: '2FA setup is available only for admins, owners and teachers' })
     }
     const pending = await pool.query(
       `select secret, expires_at
@@ -3149,9 +3255,14 @@ app.patch('/api/me', auth, ensureNotBanned, async (req, res) => {
     if (role && !(await hasAllowedRole(role))) {
       return res.status(400).json({ error: 'Invalid role' })
     }
+    if (role === ownerRoleValue) {
+      const isOwner = await isOwnerAccount(req.userId)
+      if (!isOwner) {
+        return res.status(403).json({ error: 'Only owner can assign owner role' })
+      }
+    }
     if (role === 'teacher') {
-      const adminRow = await pool.query('select is_admin from users where id = $1', [req.userId])
-      const isAdmin = Boolean(adminRow.rows[0] && adminRow.rows[0].is_admin)
+      const isAdmin = await hasAdminAccess(req.userId)
       if (!isAdmin) {
         return res.status(403).json({ error: 'Only admin can assign teacher role' })
       }
@@ -5320,8 +5431,7 @@ app.patch('/api/messages/:id', auth, ensureNotBanned, async (req, res) => {
     if (msg.rowCount === 0) return res.status(404).json({ error: 'Message not found' })
     if (msg.rows[0].deleted_at) return res.json({ ok: true })
 
-    const adminRow = await pool.query('select is_admin from users where id = $1', [req.userId])
-    const isAdmin = adminRow.rows[0] && adminRow.rows[0].is_admin
+    const isAdmin = await hasAdminAccess(req.userId)
     if (msg.rows[0].sender_id !== req.userId && !isAdmin) {
       return res.status(403).json({ error: 'Forbidden' })
     }
@@ -5361,8 +5471,7 @@ app.delete('/api/messages/:id', auth, ensureNotBanned, async (req, res) => {
     )
     if (msg.rowCount === 0) return res.status(404).json({ error: 'Message not found' })
 
-    const adminRow = await pool.query('select is_admin from users where id = $1', [req.userId])
-    const isAdmin = adminRow.rows[0] && adminRow.rows[0].is_admin
+    const isAdmin = await hasAdminAccess(req.userId)
     if (msg.rows[0].sender_id !== req.userId && !isAdmin) {
       return res.status(403).json({ error: 'Forbidden' })
     }
@@ -5925,8 +6034,7 @@ app.patch('/api/posts/:id', auth, ensureNotBanned, async (req, res) => {
     const post = await pool.query('select author_id from posts where id = $1 and deleted_at is null', [postId])
     if (post.rowCount === 0) return res.status(404).json({ error: 'Post not found' })
 
-    const adminRow = await pool.query('select is_admin from users where id = $1', [req.userId])
-    const isAdmin = adminRow.rows[0] && adminRow.rows[0].is_admin
+    const isAdmin = await hasAdminAccess(req.userId)
     if (post.rows[0].author_id !== req.userId && !isAdmin) {
       return res.status(403).json({ error: 'Forbidden' })
     }
@@ -5952,8 +6060,7 @@ app.delete('/api/posts/:id', auth, ensureNotBanned, async (req, res) => {
     const post = await pool.query('select author_id from posts where id = $1 and deleted_at is null', [postId])
     if (post.rowCount === 0) return res.status(404).json({ error: 'Post not found' })
 
-    const adminRow = await pool.query('select is_admin from users where id = $1', [req.userId])
-    const isAdmin = adminRow.rows[0] && adminRow.rows[0].is_admin
+    const isAdmin = await hasAdminAccess(req.userId)
     if (post.rows[0].author_id !== req.userId && !isAdmin) {
       return res.status(403).json({ error: 'Forbidden' })
     }
@@ -5989,12 +6096,18 @@ app.get('/api/admin/users', auth, adminOnly, async (req, res) => {
                 u.warnings_count,
                 u.is_verified,
                 u.is_admin,
-                u.is_moderator
+                u.is_moderator,
+                (u.role = $3 or exists(
+                  select 1
+                  from user_roles owner_roles
+                  where owner_roles.user_id = u.id
+                    and owner_roles.role_value = $3
+                )) as is_owner
          from users u
          where ($1 = '' or u.username ilike $2)
          order by u.username
          limit 50`,
-        [q, `${q}%`]
+        [q, `${q}%`, ownerRoleValue]
       )
       return res.json({ users: result.rows })
     } catch (err) {
@@ -6011,12 +6124,13 @@ app.get('/api/admin/users', auth, adminOnly, async (req, res) => {
                 u.warnings_count,
                 false as is_verified,
                 u.is_admin,
-                u.is_moderator
+                u.is_moderator,
+                (u.role = $3) as is_owner
          from users u
          where ($1 = '' or u.username ilike $2)
          order by u.username
          limit 50`,
-        [q, `${q}%`]
+        [q, `${q}%`, ownerRoleValue]
       )
       return res.json({ users: fallback.rows })
     }
@@ -6032,7 +6146,7 @@ app.post('/api/admin/roles', auth, adminOnly, async (req, res) => {
     const label = normalizeRoleLabel(req.body.label)
 
     if (!isValidRoleValue(value)) {
-      return res.status(400).json({ error: 'Role value must be 3-32 chars: a-z, 0-9, _ and start with a letter' })
+      return res.status(400).json({ error: 'Role value must be "*" or 3-32 chars: a-z, 0-9, _ and start with a letter' })
     }
     if (!isValidRoleLabel(label)) {
       return res.status(400).json({ error: 'Role label must be 2-48 characters' })
@@ -6079,6 +6193,17 @@ app.post('/api/admin/set-role', auth, adminOnly, async (req, res) => {
     if (allowedRoles.length !== requestedRoles.length) {
       return res.status(400).json({ error: 'Invalid role' })
     }
+    const actorAccess = await getUserAccessFlags(req.userId)
+    const targetAccess = await getUserAccessFlags(userId)
+    if (!targetAccess.exists) {
+      return res.status(404).json({ error: 'User not found' })
+    }
+    if (targetAccess.isOwner && !actorAccess.isOwner) {
+      return res.status(403).json({ error: 'Only owner can manage owner account' })
+    }
+    if (allowedRoles.includes(ownerRoleValue) && !actorAccess.isOwner) {
+      return res.status(403).json({ error: 'Only owner can assign owner role' })
+    }
 
     const existing = await pool.query(
       `select id, username
@@ -6104,6 +6229,52 @@ app.post('/api/admin/set-role', auth, adminOnly, async (req, res) => {
     })
   } catch (err) {
     console.error('Admin set role error', err)
+    res.status(500).json({ error: 'Unexpected error' })
+  }
+})
+
+app.post('/api/admin/set-admin', auth, ownerOnly, async (req, res) => {
+  try {
+    const userId = typeof req.body.userId === 'string' ? req.body.userId.trim() : ''
+    const makeAdmin = req.body.makeAdmin === true
+    if (!isValidUuid(userId)) {
+      return res.status(400).json({ error: 'Invalid user id' })
+    }
+
+    const userResult = await pool.query(
+      `select id, username
+       from users
+       where id = $1
+       limit 1`,
+      [userId]
+    )
+    if (userResult.rowCount === 0) {
+      return res.status(404).json({ error: 'User not found' })
+    }
+
+    const targetIsOwner = await isOwnerAccount(userId)
+    if (targetIsOwner && !makeAdmin) {
+      return res.status(400).json({ error: 'Owner access cannot be revoked' })
+    }
+
+    const updated = await pool.query(
+      `update users
+       set is_admin = $2
+       where id = $1
+       returning id, username, is_admin`,
+      [userId, makeAdmin]
+    )
+
+    res.json({
+      ok: true,
+      user: {
+        id: updated.rows[0].id,
+        username: updated.rows[0].username,
+        isAdmin: updated.rows[0].is_admin === true
+      }
+    })
+  } catch (err) {
+    console.error('Admin set admin error', err)
     res.status(500).json({ error: 'Unexpected error' })
   }
 })
@@ -6389,7 +6560,14 @@ app.post('/api/admin/verification-requests/:id/review', auth, adminOnly, async (
 
 app.post('/api/admin/ban', auth, adminOnly, async (req, res) => {
   try {
-    const userId = req.body.userId
+    const userId = typeof req.body.userId === 'string' ? req.body.userId.trim() : ''
+    if (!isValidUuid(userId)) {
+      return res.status(400).json({ error: 'Invalid user id' })
+    }
+    const guard = await ensureActorCanManageTarget(req.userId, userId)
+    if (!guard.ok) {
+      return res.status(guard.status).json({ error: guard.error })
+    }
     await pool.query('update users set is_banned = true where id = $1', [userId])
     res.json({ ok: true })
   } catch (err) {
@@ -6400,7 +6578,14 @@ app.post('/api/admin/ban', auth, adminOnly, async (req, res) => {
 
 app.post('/api/admin/unban', auth, adminOnly, async (req, res) => {
   try {
-    const userId = req.body.userId
+    const userId = typeof req.body.userId === 'string' ? req.body.userId.trim() : ''
+    if (!isValidUuid(userId)) {
+      return res.status(400).json({ error: 'Invalid user id' })
+    }
+    const guard = await ensureActorCanManageTarget(req.userId, userId)
+    if (!guard.ok) {
+      return res.status(guard.status).json({ error: guard.error })
+    }
     await pool.query('update users set is_banned = false where id = $1', [userId])
     res.json({ ok: true })
   } catch (err) {
@@ -6411,8 +6596,15 @@ app.post('/api/admin/unban', auth, adminOnly, async (req, res) => {
 
 app.post('/api/admin/warn', auth, adminOnly, async (req, res) => {
   try {
-    const userId = req.body.userId
+    const userId = typeof req.body.userId === 'string' ? req.body.userId.trim() : ''
     const reason = String(req.body.reason || '').trim()
+    if (!isValidUuid(userId)) {
+      return res.status(400).json({ error: 'Invalid user id' })
+    }
+    const guard = await ensureActorCanManageTarget(req.userId, userId)
+    if (!guard.ok) {
+      return res.status(guard.status).json({ error: guard.error })
+    }
     await pool.query(
       'insert into warnings (user_id, admin_id, reason) values ($1, $2, $3)',
       [userId, req.userId, reason]
@@ -6427,7 +6619,14 @@ app.post('/api/admin/warn', auth, adminOnly, async (req, res) => {
 
 app.post('/api/admin/clear-warnings', auth, adminOnly, async (req, res) => {
   try {
-    const userId = req.body.userId
+    const userId = typeof req.body.userId === 'string' ? req.body.userId.trim() : ''
+    if (!isValidUuid(userId)) {
+      return res.status(400).json({ error: 'Invalid user id' })
+    }
+    const guard = await ensureActorCanManageTarget(req.userId, userId)
+    if (!guard.ok) {
+      return res.status(guard.status).json({ error: guard.error })
+    }
     await pool.query('delete from warnings where user_id = $1', [userId])
     await pool.query('update users set warnings_count = 0 where id = $1', [userId])
     res.json({ ok: true })
@@ -6439,8 +6638,15 @@ app.post('/api/admin/clear-warnings', auth, adminOnly, async (req, res) => {
 
 app.post('/api/admin/moder', auth, adminOnly, async (req, res) => {
   try {
-    const userId = req.body.userId
+    const userId = typeof req.body.userId === 'string' ? req.body.userId.trim() : ''
     const makeModerator = Boolean(req.body.makeModerator)
+    if (!isValidUuid(userId)) {
+      return res.status(400).json({ error: 'Invalid user id' })
+    }
+    const guard = await ensureActorCanManageTarget(req.userId, userId)
+    if (!guard.ok) {
+      return res.status(guard.status).json({ error: guard.error })
+    }
     await pool.query('update users set is_moderator = $2 where id = $1', [userId, makeModerator])
     res.json({ ok: true })
   } catch (err) {
@@ -6460,6 +6666,10 @@ app.post('/api/admin/reset-password', auth, adminOnly, async (req, res) => {
     }
     if (!isValidPassword(newPassword)) {
       return res.status(400).json({ error: 'New password must be at least 6 characters' })
+    }
+    const guard = await ensureActorCanManageTarget(req.userId, userId)
+    if (!guard.ok) {
+      return res.status(guard.status).json({ error: guard.error })
     }
 
     const userResult = await pool.query(

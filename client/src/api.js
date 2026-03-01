@@ -578,6 +578,10 @@ export async function adminSetUserRole(userId, roleOrRoles) {
   return request('/admin/set-role', { method: 'POST', body: { userId, role: roleOrRoles } })
 }
 
+export async function adminSetAdmin(userId, makeAdmin) {
+  return request('/admin/set-admin', { method: 'POST', body: { userId, makeAdmin: makeAdmin === true } })
+}
+
 export async function adminResetUserPassword(userId, newPassword, revokeSessions = true) {
   return request('/admin/reset-password', {
     method: 'POST',

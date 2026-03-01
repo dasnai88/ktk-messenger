@@ -54,6 +54,7 @@ import {
   adminReviewVerificationRequest,
   adminCreateRole,
   adminSetUserRole,
+  adminSetAdmin,
   adminResetUserPassword,
   toggleSubscription,
   deleteProfileTrack,
@@ -121,6 +122,7 @@ const icons = {
 }
 
 const fallbackRoles = [
+  { value: '*', label: 'Owner' },
   { value: 'student', label: 'Студент' },
   { value: 'teacher', label: 'Учитель' },
   { value: 'programmist', label: 'Программист' },
@@ -6316,6 +6318,15 @@ export default function App() {
     return single ? [single] : []
   }
 
+  const isOwnerUser = (targetUser) => {
+    if (!targetUser || typeof targetUser !== 'object') return false
+    if (targetUser.isOwner === true || targetUser.is_owner === true) return true
+    if (String(targetUser.role || '').trim() === '*') return true
+    return getUserRoleList(targetUser).includes('*')
+  }
+
+  const currentUserIsOwner = isOwnerUser(user)
+
   const loadMyPrivacy = async ({ silent = false } = {}) => {
     if (!user) return []
     if (!silent) setPrivacyControlsLoading(true)
@@ -6675,6 +6686,23 @@ export default function App() {
         setUser((prev) => (prev ? { ...prev, role: selectedRoles[0], roles: selectedRoles } : prev))
       }
       setStatus({ type: 'success', message: `Роли @${targetUser.username} обновлены.` })
+    } catch (err) {
+      setStatus({ type: 'error', message: err.message })
+    }
+  }
+
+  const handleAdminToggleAdminForUser = async (targetUser) => {
+    if (!targetUser || !targetUser.id || !currentUserIsOwner) return
+    const nextValue = !(targetUser.is_admin === true)
+    try {
+      await adminSetAdmin(targetUser.id, nextValue)
+      await loadAdminUsers(adminQuery)
+      setStatus({
+        type: 'success',
+        message: nextValue
+          ? `ADMIN права выданы @${targetUser.username}.`
+          : `ADMIN права сняты с @${targetUser.username}.`
+      })
     } catch (err) {
       setStatus({ type: 'error', message: err.message })
     }
@@ -7907,6 +7935,12 @@ export default function App() {
     const statusEmoji = String(rawUser.statusEmoji || '').trim()
     const statusText = String(rawUser.statusText || '').trim()
     const isVerified = rawUser.isVerified === true || rawUser.is_verified === true
+    const isOwner = (
+      rawUser.isOwner === true ||
+      rawUser.is_owner === true ||
+      roleValues.includes('*') ||
+      String(rawUser.role || '').trim() === '*'
+    )
     const subscriptionKnown = Object.prototype.hasOwnProperty.call(rawUser, 'isSubscribed')
       || Object.prototype.hasOwnProperty.call(rawUser, 'is_subscribed')
     const isSubscribed = subscriptionKnown && (rawUser.isSubscribed === true || rawUser.is_subscribed === true)
@@ -7928,6 +7962,7 @@ export default function App() {
       avatarUrl: rawUser.avatarUrl || '',
       roleLabels: roleLabels.length > 0 ? roleLabels : ['Студент'],
       isVerified,
+      isOwner,
       statusEmoji,
       statusText,
       isSubscribed,
@@ -7966,6 +8001,7 @@ export default function App() {
       ...extraUser,
       roleLabels: roleLabels.length > 0 ? roleLabels : ['Студент'],
       isVerified: baseUser.isVerified === true || extraUser.isVerified === true,
+      isOwner: baseUser.isOwner === true || extraUser.isOwner === true,
       isSubscribed,
       subscriptionKnown,
       subscribersCount,
@@ -12584,6 +12620,7 @@ export default function App() {
                       <h2 className="profile-hero-name">
                         {profileView.displayName || profileView.username}
                         {profileView.isVerified && <span className="verified-mark" title="Верифицированный профиль">✓</span>}
+                        {isOwnerUser(profileView) && <span className="owner-mark" title="Owner">*</span>}
                       </h2>
                       <span>@{profileView.username}</span>
                       {profileViewRoleLabels.length > 0 && (
@@ -13089,12 +13126,16 @@ export default function App() {
             </section>
             <div className="admin-list">
               {adminUsers.length === 0 && <div className="empty">Пользователи не найдены.</div>}
-              {adminUsers.map((u) => (
+              {adminUsers.map((u) => {
+                const targetIsOwner = isOwnerUser(u)
+                const canManageTarget = currentUserIsOwner || !targetIsOwner
+                return (
                 <div key={u.id} className="admin-item">
                   <div>
                     <strong>{u.display_name || u.username}</strong>
                     <span>@{u.username}</span>
                     <div className="admin-badges">
+                      {isOwnerUser(u) && <span className="badge owner">OWNER</span>}
                       {u.is_admin && <span className="badge admin">ADMIN</span>}
                       {u.is_moderator && <span className="badge moder">MODER</span>}
                       {u.is_verified && <span className="badge verified">VERIFIED</span>}
@@ -13116,25 +13157,37 @@ export default function App() {
                   <div className="admin-actions">
                     <div className="admin-role-picker">
                       {roleOptions.map((role) => {
+                        if (role.value === '*' && !currentUserIsOwner) return null
                         const activeRoles = Array.isArray(adminRoleByUser[u.id]) ? adminRoleByUser[u.id] : getUserRoleList(u)
                         const isActive = activeRoles.includes(role.value)
+                        const roleButtonDisabled = !canManageTarget
                         return (
                           <button
                             key={`${u.id}-role-picker-${role.value}`}
                             type="button"
                             className={isActive ? 'active' : ''}
-                            onClick={() => toggleAdminRoleChoice(u.id, role.value)}
+                            disabled={roleButtonDisabled}
+                            onClick={() => {
+                              if (roleButtonDisabled) return
+                              toggleAdminRoleChoice(u.id, role.value)
+                            }}
                           >
                             {role.label}
                           </button>
                         )
                       })}
                     </div>
-                    <button type="button" onClick={() => handleAdminSetRoleForUser(u)}>
+                    <button type="button" disabled={!canManageTarget} onClick={() => handleAdminSetRoleForUser(u)}>
                       Сохранить роли
                     </button>
+                    {currentUserIsOwner && !targetIsOwner && (
+                      <button type="button" onClick={() => handleAdminToggleAdminForUser(u)}>
+                        {u.is_admin ? 'Снять ADMIN' : 'Выдать ADMIN'}
+                      </button>
+                    )}
                     <button
                       type="button"
+                      disabled={!canManageTarget}
                       onClick={() =>
                         adminSetVerified(u.id, !u.is_verified)
                           .then(async () => {
@@ -13149,16 +13202,17 @@ export default function App() {
                       {u.is_verified ? 'Снять верификацию' : 'Верифицировать'}
                     </button>
                     {u.is_banned ? (
-                      <button type="button" onClick={() => adminUnbanUser(u.id).then(() => loadAdminUsers(adminQuery))}>
+                      <button type="button" disabled={!canManageTarget} onClick={() => adminUnbanUser(u.id).then(() => loadAdminUsers(adminQuery))}>
                         Разбан
                       </button>
                     ) : (
-                      <button type="button" onClick={() => adminBanUser(u.id).then(() => loadAdminUsers(adminQuery))}>
+                      <button type="button" disabled={!canManageTarget} onClick={() => adminBanUser(u.id).then(() => loadAdminUsers(adminQuery))}>
                         Бан
                       </button>
                     )}
                     <input
                       type="text"
+                      disabled={!canManageTarget}
                       placeholder="Причина предупреждения"
                       value={adminWarnReason[u.id] || ''}
                       onChange={(event) =>
@@ -13167,6 +13221,7 @@ export default function App() {
                     />
                     <button
                       type="button"
+                      disabled={!canManageTarget}
                       onClick={() =>
                         adminWarnUser(u.id, adminWarnReason[u.id] || '')
                           .then(() => {
@@ -13179,6 +13234,7 @@ export default function App() {
                     </button>
                     <button
                       type="button"
+                      disabled={!canManageTarget}
                       onClick={() =>
                         adminClearWarnings(u.id).then(() => loadAdminUsers(adminQuery))
                       }
@@ -13187,6 +13243,7 @@ export default function App() {
                     </button>
                     <button
                       type="button"
+                      disabled={!canManageTarget}
                       onClick={() =>
                         adminSetModerator(u.id, !u.is_moderator)
                           .then(() => loadAdminUsers(adminQuery))
@@ -13197,6 +13254,7 @@ export default function App() {
                     <div className="admin-inline-row admin-password-reset">
                       <input
                         type="password"
+                        disabled={!canManageTarget}
                         value={adminResetPasswordByUser[u.id] || ''}
                         onChange={(event) =>
                           setAdminResetPasswordByUser((prev) => ({ ...prev, [u.id]: event.target.value }))
@@ -13208,6 +13266,7 @@ export default function App() {
                       <button
                         type="button"
                         className="danger"
+                        disabled={!canManageTarget}
                         onClick={() => handleAdminResetPasswordForUser(u)}
                       >
                         Reset password
@@ -13215,7 +13274,8 @@ export default function App() {
                     </div>
                   </div>
                 </div>
-              ))}
+                )
+              })}
             </div>
           </div>
         )}
@@ -13236,6 +13296,7 @@ export default function App() {
                     <strong>
                       {user.displayName || user.username}
                       {user.isVerified ? <span className="verified-mark" title="Verified">✓</span> : null}
+                      {currentUserIsOwner ? <span className="owner-mark" title="Owner">*</span> : null}
                     </strong>
                     <span>@{user.username}</span>
                     <small>{user.statusEmoji ? `${user.statusEmoji} ` : ''}{user.statusText || 'без статуса'}</small>
@@ -13878,7 +13939,7 @@ export default function App() {
                         </span>
                       </div>
                       {!twoFactorStatus.eligible && (
-                        <p className="profile-verification-text">2FA доступна для ролей teacher/admin.</p>
+                        <p className="profile-verification-text">2FA доступна для ролей teacher/admin/owner.</p>
                       )}
                       {twoFactorStatus.eligible && !twoFactorStatus.enabled && (
                         <div className="profile-verification-actions">
@@ -14411,7 +14472,10 @@ export default function App() {
                   <option
                     key={role.value}
                     value={role.value}
-                    disabled={role.value === 'teacher' && !(user && user.isAdmin)}
+                    disabled={
+                      (role.value === 'teacher' && !(user && user.isAdmin)) ||
+                      (role.value === '*' && !currentUserIsOwner)
+                    }
                   >
                     {role.label}
                   </option>
@@ -14958,6 +15022,7 @@ export default function App() {
                 <strong>
                   {miniProfileCard.user.displayName || miniProfileCard.user.username || 'Пользователь'}
                   {miniProfileCard.user.isVerified && <span className="verified-mark mini-profile-verified" title="Верифицированный профиль">✓</span>}
+                  {miniProfileCard.user.isOwner && <span className="owner-mark mini-profile-owner" title="Owner">*</span>}
                 </strong>
                 {miniProfileCard.user.username && <span>@{miniProfileCard.user.username}</span>}
               </div>

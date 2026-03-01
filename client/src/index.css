@@ -2302,6 +2302,12 @@ pre,
   border-color: rgba(34, 197, 94, 0.4);
 }
 
+.badge.owner {
+  background: rgba(245, 158, 11, 0.18);
+  color: #fcd34d;
+  border-color: rgba(245, 158, 11, 0.45);
+}
+
 .admin-meta {
   display: grid;
   gap: 4px;
@@ -6749,6 +6755,26 @@ pre,
 
 .mini-profile-verified {
   margin-left: 4px;
+  transform: translateY(-1px);
+}
+
+.owner-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  margin-left: 6px;
+  border-radius: 999px;
+  border: 1px solid rgba(245, 158, 11, 0.45);
+  background: rgba(245, 158, 11, 0.16);
+  color: #fbbf24;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.mini-profile-owner {
   transform: translateY(-1px);
 }
 
