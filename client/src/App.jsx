@@ -8100,6 +8100,27 @@ export default function App() {
     setUiPreferences((prev) => normalizeUiPreferences({ ...prev, [key]: value }))
   }
 
+  const updateUiColorPreference = (key, value) => {
+    setUiPreferences((prev) => {
+      const next = { ...prev, [key]: value }
+      if (key === 'accentColor' || key === 'accent2Color') {
+        next.syncAccent = false
+      }
+      if (key === 'outlineColor') {
+        next.outlineMode = 'custom'
+      }
+      return normalizeUiPreferences(next)
+    })
+  }
+
+  const enableFullUiCustomization = () => {
+    setUiPreferences((prev) => normalizeUiPreferences({
+      ...prev,
+      syncAccent: false,
+      outlineMode: 'custom'
+    }))
+  }
+
   const applyUiThemePreset = (preset) => {
     if (!preset) return
     setUiPreferences((prev) => normalizeUiPreferences({
@@ -9007,6 +9028,14 @@ export default function App() {
   const settingsRoleLabels = useMemo(() => (
     getUserRoleList(user).map((value) => roleLabelByValue.get(value) || value)
   ), [user, roleLabelByValue])
+  const appearanceEditableColors = useMemo(() => {
+    const normalized = normalizeUiPreferences(uiPreferences)
+    return {
+      accent: normalizeHexColor(normalized.accentColor, DEFAULT_UI_PREFERENCES.accentColor),
+      accent2: normalizeHexColor(normalized.accent2Color, DEFAULT_UI_PREFERENCES.accent2Color),
+      outline: normalizeHexColor(normalized.outlineColor, DEFAULT_UI_PREFERENCES.outlineColor)
+    }
+  }, [uiPreferences])
   const appearanceAccentPreview = useMemo(() => {
     const normalized = normalizeUiPreferences(uiPreferences)
     if (normalized.syncAccent) {
@@ -12781,7 +12810,7 @@ export default function App() {
                           checked={uiPreferences.syncAccent}
                           onChange={(event) => updateUiPreference('syncAccent', event.target.checked)}
                         />
-                        Sync accent with profile color
+                        Sync accents with profile color (auto mode)
                       </label>
 
                       <label className="ui-studio-toggle">
@@ -12790,35 +12819,38 @@ export default function App() {
                           checked={uiPreferences.outlineMode === 'custom'}
                           onChange={(event) => updateUiPreference('outlineMode', event.target.checked ? 'custom' : 'auto')}
                         />
-                        Custom outline color
+                        Custom outline color (manual mode)
                       </label>
 
+                      <div className="ui-studio-actions">
+                        <button type="button" className="ghost" onClick={enableFullUiCustomization}>
+                          Enable full customization
+                        </button>
+                      </div>
+
                       <div className="appearance-accent-grid">
-                        <label className={uiPreferences.syncAccent ? 'is-disabled' : ''}>
+                        <label>
                           Primary accent
                           <input
                             type="color"
-                            value={appearanceAccentPreview.accent}
-                            disabled={uiPreferences.syncAccent}
-                            onChange={(event) => updateUiPreference('accentColor', event.target.value)}
+                            value={appearanceEditableColors.accent}
+                            onChange={(event) => updateUiColorPreference('accentColor', event.target.value)}
                           />
                         </label>
-                        <label className={uiPreferences.syncAccent ? 'is-disabled' : ''}>
+                        <label>
                           Secondary accent
                           <input
                             type="color"
-                            value={appearanceAccentPreview.accent2}
-                            disabled={uiPreferences.syncAccent}
-                            onChange={(event) => updateUiPreference('accent2Color', event.target.value)}
+                            value={appearanceEditableColors.accent2}
+                            onChange={(event) => updateUiColorPreference('accent2Color', event.target.value)}
                           />
                         </label>
-                        <label className={uiPreferences.outlineMode !== 'custom' ? 'is-disabled' : ''}>
+                        <label>
                           Outline color
                           <input
                             type="color"
-                            value={appearanceOutlinePreview}
-                            disabled={uiPreferences.outlineMode !== 'custom'}
-                            onChange={(event) => updateUiPreference('outlineColor', event.target.value)}
+                            value={appearanceEditableColors.outline}
+                            onChange={(event) => updateUiColorPreference('outlineColor', event.target.value)}
                           />
                         </label>
                       </div>
@@ -12830,7 +12862,7 @@ export default function App() {
                         {' '}
                         {uiPreferences.outlineMode === 'custom'
                           ? 'Outline color is custom and affects borders in chat, feed and panels.'
-                          : 'Outline color is in auto mode.'}
+                          : 'Outline color is in auto mode. Changing outline picker switches it to manual.'}
                       </p>
 
                       <div className="appearance-preset-row">
