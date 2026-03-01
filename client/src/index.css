@@ -1,4 +1,4 @@
-﻿@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;600;700&display=swap');
+﻿@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;600&family=Manrope:wght@300;400;600;700&family=Space+Grotesk:wght@500;600;700&display=swap');
 
 :root {
   --bg: #0f0c0d;
@@ -35,8 +35,12 @@
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --safe-left: env(safe-area-inset-left, 0px);
   --mobile-rail-height: 72px;
+  --font-body: 'Manrope', 'IBM Plex Sans', 'Segoe UI', sans-serif;
+  --font-display: 'Space Grotesk', 'Manrope', 'Avenir Next', sans-serif;
+  --font-mono: 'JetBrains Mono', 'IBM Plex Mono', 'SFMono-Regular', Consolas, monospace;
+  --type-tight: -0.015em;
   color-scheme: dark;
-  font-family: 'Manrope', system-ui, sans-serif;
+  font-family: var(--font-body);
   color: var(--text);
 }
 
@@ -99,7 +103,45 @@ body {
   min-height: 100vh;
   min-height: 100dvh;
   background: var(--bg);
+  font-family: var(--font-body);
+  line-height: 1.45;
+  letter-spacing: 0.01em;
+  font-feature-settings: 'kern' 1, 'liga' 1, 'calt' 1;
   -webkit-text-size-adjust: 100%;
+}
+
+h1,
+h2,
+h3,
+.panel h2,
+.settings-pane h2,
+.profile-hero-name,
+.profile-achievements-summary h3,
+.profile-dev-head h3,
+.profile-pro-head h3,
+.profile-showcase-head h3,
+.admin-panel h2,
+.admin-role-manager strong,
+.admin-verify-head strong {
+  font-family: var(--font-display);
+  letter-spacing: var(--type-tight);
+  font-weight: 700;
+  text-wrap: balance;
+}
+
+.brand-inline p,
+.settings-pane .subtitle,
+.profile-hero-main p,
+.profile-achievement-meta span,
+.admin-item span {
+  letter-spacing: 0.005em;
+}
+
+code,
+kbd,
+pre,
+.profile-theme-customizer-head code {
+  font-family: var(--font-mono);
 }
 
 .page {
@@ -7867,6 +7909,102 @@ body {
   animation: fade-up var(--motion-base) var(--ease-out) both;
 }
 
+@keyframes surface-pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes content-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.settings-pane,
+.profile-insights-grid > *,
+.profile-pro-grid > *,
+.profile-dev-preset-grid > *,
+.settings-kpi-grid > .settings-kpi,
+.admin-list > .admin-item {
+  animation: surface-pop-in var(--motion-base) var(--ease-out) both;
+}
+
+.settings-pane > *,
+.settings-action-list > *,
+.profile-insights-grid > * > *,
+.profile-pro-grid > * > *,
+.profile-dev-lab > *,
+.admin-item > * {
+  animation: content-fade-in var(--motion-base) var(--ease-out) both;
+}
+
+.profile-insights-grid > *:nth-child(1),
+.profile-pro-grid > *:nth-child(1),
+.settings-kpi-grid > .settings-kpi:nth-child(1),
+.admin-list > .admin-item:nth-child(1) {
+  animation-delay: 30ms;
+}
+
+.profile-insights-grid > *:nth-child(2),
+.profile-pro-grid > *:nth-child(2),
+.settings-kpi-grid > .settings-kpi:nth-child(2),
+.admin-list > .admin-item:nth-child(2) {
+  animation-delay: 60ms;
+}
+
+.profile-insights-grid > *:nth-child(3),
+.profile-pro-grid > *:nth-child(3),
+.settings-kpi-grid > .settings-kpi:nth-child(3),
+.admin-list > .admin-item:nth-child(3) {
+  animation-delay: 90ms;
+}
+
+.profile-insights-grid > *:nth-child(4),
+.profile-pro-grid > *:nth-child(4),
+.settings-kpi-grid > .settings-kpi:nth-child(4),
+.admin-list > .admin-item:nth-child(4) {
+  animation-delay: 120ms;
+}
+
+.panel,
+.settings-pane,
+.profile-power-card,
+.profile-achievements-card,
+.profile-showcase-card,
+.profile-dev-card,
+.admin-item {
+  transition:
+    transform var(--motion-fast) var(--ease-spring),
+    border-color var(--motion-fast) var(--ease-out),
+    background var(--motion-fast) var(--ease-out),
+    box-shadow var(--motion-fast) var(--ease-out);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .panel:hover,
+  .settings-pane:hover,
+  .profile-power-card:hover,
+  .profile-achievements-card:hover,
+  .profile-showcase-card:hover,
+  .profile-dev-card:hover,
+  .admin-item:hover {
+    transform: translateY(-1px);
+    border-color: rgba(var(--accent-rgb), 0.28);
+    box-shadow: 0 18px 34px rgba(2, 6, 23, 0.32);
+  }
+}
+
 .profile-hero.profile-hero-expanded {
   grid-template-columns: auto 1fr auto;
   align-items: center;
@@ -9835,3 +9973,4 @@ body {
     scroll-behavior: auto !important;
   }
 }
+
