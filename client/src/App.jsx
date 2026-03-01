@@ -714,12 +714,21 @@ const UI_DENSITY_OPTIONS = [
   { value: 'comfortable', label: 'Comfort' },
   { value: 'spacious', label: 'Spacious' }
 ]
+const UI_THEME_COLOR_PRESETS = [
+  { id: 'ember', label: 'Ember', accent: '#7a1f1d', accent2: '#b64d45' },
+  { id: 'ocean', label: 'Ocean', accent: '#1f4f7a', accent2: '#3f86c4' },
+  { id: 'forest', label: 'Forest', accent: '#1f6b45', accent2: '#3da577' },
+  { id: 'violet', label: 'Violet', accent: '#5b2d91', accent2: '#8553c6' },
+  { id: 'graphite', label: 'Graphite', accent: '#3f4857', accent2: '#69778f' }
+]
 const DEFAULT_UI_PREFERENCES = {
   style: 'glass',
   density: 'comfortable',
   ambient: 58,
   radius: 22,
-  syncAccent: true
+  syncAccent: true,
+  accentColor: '#7a1f1d',
+  accent2Color: '#b64d45'
 }
 const DEFAULT_PROFILE_SHOWCASE = {
   headline: '',
@@ -902,12 +911,16 @@ function normalizeUiPreferences(value) {
   const ambient = clampNumber(source.ambient, 0, 100)
   const radius = clampNumber(source.radius, 12, 36)
   const syncAccent = source.syncAccent !== false
+  const accentColor = normalizeHexColor(source.accentColor, DEFAULT_UI_PREFERENCES.accentColor)
+  const accent2Color = normalizeHexColor(source.accent2Color, DEFAULT_UI_PREFERENCES.accent2Color)
   return {
     style,
     density,
     ambient,
     radius,
-    syncAccent
+    syncAccent,
+    accentColor,
+    accent2Color
   }
 }
 
@@ -3294,14 +3307,17 @@ export default function App() {
     root.style.setProperty('--bubble-radius', `${Math.max(14, radius - 3)}px`)
 
     const accentSource = normalized.syncAccent
-      ? normalizeHexColor(profileForm.themeColor || (user && user.themeColor) || '#7a1f1d')
-      : '#7a1f1d'
+      ? normalizeHexColor(profileForm.themeColor || (user && user.themeColor) || DEFAULT_UI_PREFERENCES.accentColor)
+      : normalizeHexColor(normalized.accentColor, DEFAULT_UI_PREFERENCES.accentColor)
     const accentRgb = hexToRgb(accentSource)
-    const accent2Rgb = mixRgbColor(accentRgb, { r: 255, g: 255, b: 255 }, theme === 'light' ? 0.05 : 0.16)
-    const accent3Rgb = mixRgbColor(accentRgb, { r: 255, g: 255, b: 255 }, theme === 'light' ? 0.12 : 0.3)
+    const accent2Source = normalized.syncAccent
+      ? rgbToHex(mixRgbColor(accentRgb, { r: 255, g: 255, b: 255 }, theme === 'light' ? 0.14 : 0.24))
+      : normalizeHexColor(normalized.accent2Color, DEFAULT_UI_PREFERENCES.accent2Color)
+    const accent2Rgb = hexToRgb(accent2Source)
+    const accent3Rgb = mixRgbColor(accent2Rgb, { r: 255, g: 255, b: 255 }, theme === 'light' ? 0.18 : 0.28)
 
     root.style.setProperty('--accent', accentSource)
-    root.style.setProperty('--accent-2', rgbToHex(accent2Rgb))
+    root.style.setProperty('--accent-2', accent2Source)
     root.style.setProperty('--accent-3', rgbToHex(accent3Rgb))
     root.style.setProperty('--accent-rgb', rgbToCssTriplet(accentRgb))
     root.style.setProperty('--accent-2-rgb', rgbToCssTriplet(accent2Rgb))
@@ -8061,6 +8077,16 @@ export default function App() {
     setUiPreferences((prev) => normalizeUiPreferences({ ...prev, [key]: value }))
   }
 
+  const applyUiThemePreset = (preset) => {
+    if (!preset) return
+    setUiPreferences((prev) => normalizeUiPreferences({
+      ...prev,
+      syncAccent: false,
+      accentColor: preset.accent,
+      accent2Color: preset.accent2
+    }))
+  }
+
   const resetUiPreferences = () => {
     setUiPreferences({ ...DEFAULT_UI_PREFERENCES })
   }
@@ -8958,6 +8984,30 @@ export default function App() {
   const settingsRoleLabels = useMemo(() => (
     getUserRoleList(user).map((value) => roleLabelByValue.get(value) || value)
   ), [user, roleLabelByValue])
+  const appearanceAccentPreview = useMemo(() => {
+    const normalized = normalizeUiPreferences(uiPreferences)
+    if (normalized.syncAccent) {
+      const accent = normalizeHexColor(
+        profileForm.themeColor || (user && user.themeColor) || DEFAULT_UI_PREFERENCES.accentColor,
+        DEFAULT_UI_PREFERENCES.accentColor
+      )
+      const accent2 = rgbToHex(mixRgbColor(hexToRgb(accent), { r: 255, g: 255, b: 255 }, theme === 'light' ? 0.14 : 0.24))
+      return { accent, accent2 }
+    }
+    return {
+      accent: normalizeHexColor(normalized.accentColor, DEFAULT_UI_PREFERENCES.accentColor),
+      accent2: normalizeHexColor(normalized.accent2Color, DEFAULT_UI_PREFERENCES.accent2Color)
+    }
+  }, [profileForm.themeColor, theme, uiPreferences, user ? user.themeColor : null])
+  const appearanceActivePresetId = useMemo(() => {
+    const normalized = normalizeUiPreferences(uiPreferences)
+    if (normalized.syncAccent) return ''
+    const match = UI_THEME_COLOR_PRESETS.find((preset) => (
+      normalizeHexColor(preset.accent, DEFAULT_UI_PREFERENCES.accentColor) === normalizeHexColor(normalized.accentColor, DEFAULT_UI_PREFERENCES.accentColor) &&
+      normalizeHexColor(preset.accent2, DEFAULT_UI_PREFERENCES.accent2Color) === normalizeHexColor(normalized.accent2Color, DEFAULT_UI_PREFERENCES.accent2Color)
+    ))
+    return match ? match.id : ''
+  }, [uiPreferences])
   const settingsNavItems = useMemo(() => ([
     { id: 'general', icon: '⚙️', label: 'Общие настройки', badge: '' },
     { id: 'notifications', icon: '🔔', label: 'Уведомления', badge: pushState.enabled ? 'ON' : 'OFF' },
@@ -12628,12 +12678,12 @@ export default function App() {
                 )}
                 {settingsSection === 'appearance' && (
                   <section className="settings-pane">
-                    <h2>Оформление</h2>
-                    <p className="subtitle">Глобальный стиль интерфейса.</p>
-                    <section className="ui-studio">
+                    <h2>Appearance</h2>
+                    <p className="subtitle">Theme mode, density, radii and accent colors.</p>
+                    <section className="ui-studio appearance-studio">
                       <div className="ui-studio-grid">
                         <label>
-                          Стиль
+                          Style
                           <select value={uiPreferences.style} onChange={(event) => updateUiPreference('style', event.target.value)}>
                             {UI_STYLE_OPTIONS.map((item) => (
                               <option key={item.value} value={item.value}>{item.label}</option>
@@ -12641,16 +12691,121 @@ export default function App() {
                           </select>
                         </label>
                         <label>
-                          Плотность
+                          Density
                           <select value={uiPreferences.density} onChange={(event) => updateUiPreference('density', event.target.value)}>
                             {UI_DENSITY_OPTIONS.map((item) => (
                               <option key={item.value} value={item.value}>{item.label}</option>
                             ))}
                           </select>
                         </label>
+                        <label>
+                          Ambient intensity: {uiPreferences.ambient}
+                          <input
+                            type="range"
+                            min={0}
+                            max={100}
+                            step={1}
+                            value={uiPreferences.ambient}
+                            onChange={(event) => updateUiPreference('ambient', Number(event.target.value))}
+                          />
+                        </label>
+                        <label>
+                          Card radius: {Math.round(uiPreferences.radius)}px
+                          <input
+                            type="range"
+                            min={12}
+                            max={36}
+                            step={1}
+                            value={uiPreferences.radius}
+                            onChange={(event) => updateUiPreference('radius', Number(event.target.value))}
+                          />
+                        </label>
                       </div>
+
+                      <div className="appearance-theme-mode">
+                        <button
+                          type="button"
+                          className={theme === 'dark' ? 'active' : ''}
+                          onClick={() => setTheme('dark')}
+                        >
+                          Dark
+                        </button>
+                        <button
+                          type="button"
+                          className={theme === 'light' ? 'active' : ''}
+                          onClick={() => setTheme('light')}
+                        >
+                          Light
+                        </button>
+                      </div>
+
+                      <label className="ui-studio-toggle">
+                        <input
+                          type="checkbox"
+                          checked={uiPreferences.syncAccent}
+                          onChange={(event) => updateUiPreference('syncAccent', event.target.checked)}
+                        />
+                        Sync accent with profile color
+                      </label>
+
+                      <div className="appearance-accent-grid">
+                        <label className={uiPreferences.syncAccent ? 'is-disabled' : ''}>
+                          Primary accent
+                          <input
+                            type="color"
+                            value={appearanceAccentPreview.accent}
+                            disabled={uiPreferences.syncAccent}
+                            onChange={(event) => updateUiPreference('accentColor', event.target.value)}
+                          />
+                        </label>
+                        <label className={uiPreferences.syncAccent ? 'is-disabled' : ''}>
+                          Secondary accent
+                          <input
+                            type="color"
+                            value={appearanceAccentPreview.accent2}
+                            disabled={uiPreferences.syncAccent}
+                            onChange={(event) => updateUiPreference('accent2Color', event.target.value)}
+                          />
+                        </label>
+                      </div>
+
+                      <p className="appearance-accent-hint">
+                        {uiPreferences.syncAccent
+                          ? 'Accent currently follows your profile color. Disable sync to choose custom colors.'
+                          : 'Custom accents are active. Pick a preset below or fine tune manually.'}
+                      </p>
+
+                      <div className="appearance-preset-row">
+                        {UI_THEME_COLOR_PRESETS.map((preset) => (
+                          <button
+                            key={preset.id}
+                            type="button"
+                            className={!uiPreferences.syncAccent && appearanceActivePresetId === preset.id ? 'active' : ''}
+                            onClick={() => applyUiThemePreset(preset)}
+                          >
+                            <span
+                              className="appearance-preset-dot"
+                              style={{
+                                background: 'linear-gradient(135deg, ' + preset.accent + ' 0%, ' + preset.accent2 + ' 100%)'
+                              }}
+                            />
+                            {preset.label}
+                          </button>
+                        ))}
+                      </div>
+
+                      <div
+                        className="appearance-preview-card"
+                        style={{
+                          background: 'linear-gradient(135deg, ' + appearanceAccentPreview.accent + ' 0%, ' + appearanceAccentPreview.accent2 + ' 100%)'
+                        }}
+                      >
+                        <strong>Theme preview</strong>
+                        <span>{theme === 'dark' ? 'Dark' : 'Light'} / {uiPreferences.style} / {uiPreferences.density}</span>
+                      </div>
+
                       <div className="ui-studio-actions">
-                        <button type="button" className="ghost" onClick={resetUiPreferences}>Сбросить визуал</button>
+                        <button type="button" className="ghost" onClick={resetUiPreferences}>Reset appearance</button>
                       </div>
                     </section>
                   </section>
@@ -14069,7 +14224,3 @@ export default function App() {
     </div>
   )
 }
-
-
-
-
