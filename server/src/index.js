@@ -73,6 +73,11 @@ const pollQuestionMaxLength = 240
 const pollOptionMaxLength = 120
 const pollOptionMinCount = 2
 const pollOptionMaxCount = 10
+const verificationRequestFullNameMaxLength = 80
+const verificationRequestReasonMaxLength = 360
+const verificationRequestEvidenceMaxLength = 220
+const verificationRequestAdminNoteMaxLength = 260
+const verificationRequestStatuses = new Set(['pending', 'approved', 'rejected', 'cancelled'])
 const PERSONAL_FAVORITES_TITLE = 'РР·Р±СЂР°РЅРЅРѕРµ'
 
 if (webPushEnabled) {
@@ -436,6 +441,28 @@ function normalizeRoleLabel(rawLabel) {
   return String(rawLabel || '').trim()
 }
 
+function normalizeVerificationRequestStatus(rawStatus, fallback = 'pending') {
+  const status = String(rawStatus || '').trim().toLowerCase()
+  if (verificationRequestStatuses.has(status)) return status
+  return fallback
+}
+
+function normalizeVerificationRequestFullName(value) {
+  return String(value || '').trim().slice(0, verificationRequestFullNameMaxLength)
+}
+
+function normalizeVerificationRequestReason(value) {
+  return String(value || '').trim().slice(0, verificationRequestReasonMaxLength)
+}
+
+function normalizeVerificationRequestEvidence(value) {
+  return String(value || '').trim().slice(0, verificationRequestEvidenceMaxLength)
+}
+
+function normalizeVerificationRequestAdminNote(value) {
+  return String(value || '').trim().slice(0, verificationRequestAdminNoteMaxLength)
+}
+
 function isValidRoleValue(roleValue) {
   return /^[a-z][a-z0-9_]{2,31}$/.test(roleValue)
 }
@@ -631,6 +658,24 @@ function mapGif(row) {
   }
 }
 
+function mapVerificationRequest(row) {
+  if (!row || typeof row !== 'object') return null
+  return {
+    id: row.id,
+    userId: row.user_id,
+    fullName: row.full_name || '',
+    reason: row.reason || '',
+    evidence: row.evidence || '',
+    status: normalizeVerificationRequestStatus(row.status),
+    adminNote: row.admin_note || '',
+    reviewedBy: row.reviewed_by || null,
+    reviewedByUsername: row.reviewed_by_username || '',
+    createdAt: row.created_at || null,
+    updatedAt: row.updated_at || null,
+    reviewedAt: row.reviewed_at || null
+  }
+}
+
 function normalizeProfileShowcaseTheme(value) {
   const normalized = String(value || '').trim().toLowerCase()
   if (!normalized) return 'default'
@@ -714,6 +759,37 @@ function mapProfileShowcaseRow(row) {
     ...normalized,
     updatedAt: row.updated_at || null
   }
+}
+
+function isVerificationSchemaError(err) {
+  if (!err || typeof err !== 'object') return false
+  if (err.code !== '42P01' && err.code !== '42703') return false
+  const message = typeof err.message === 'string' ? err.message.toLowerCase() : ''
+  return message.includes('verification_requests') || message.includes('is_verified')
+}
+
+async function getLatestVerificationRequestForUser(userId, dbClient = null) {
+  const db = dbClient || pool
+  const result = await db.query(
+    `select id,
+            user_id,
+            full_name,
+            reason,
+            evidence,
+            status,
+            admin_note,
+            reviewed_by,
+            reviewed_at,
+            created_at,
+            updated_at
+     from verification_requests
+     where user_id = $1
+     order by created_at desc
+     limit 1`,
+    [userId]
+  )
+  if (result.rowCount === 0) return null
+  return mapVerificationRequest(result.rows[0])
 }
 
 function isProfileFeaturesSchemaError(err) {
@@ -1809,6 +1885,153 @@ app.get('/api/me', auth, ensureNotBanned, async (req, res) => {
     res.json({ user })
   } catch (err) {
     console.error('Me error', err)
+    res.status(500).json({ error: 'Unexpected error' })
+  }
+})
+
+app.get('/api/me/verification-request', auth, ensureNotBanned, async (req, res) => {
+  try {
+    const verificationRequest = await getLatestVerificationRequestForUser(req.userId)
+    res.json({ request: verificationRequest })
+  } catch (err) {
+    if (isVerificationSchemaError(err)) {
+      return res.status(503).json({ error: 'Verification requests feature is unavailable: database migration required' })
+    }
+    console.error('Get my verification request error', err)
+    res.status(500).json({ error: 'Unexpected error' })
+  }
+})
+
+app.post('/api/me/verification-request', auth, ensureNotBanned, async (req, res) => {
+  try {
+    const fullName = normalizeVerificationRequestFullName(req.body.fullName)
+    const reason = normalizeVerificationRequestReason(req.body.reason)
+    const evidence = normalizeVerificationRequestEvidence(req.body.evidence)
+
+    if (fullName.length < 2) {
+      return res.status(400).json({ error: 'Full name must be at least 2 characters' })
+    }
+    if (reason.length < 12) {
+      return res.status(400).json({ error: 'Reason must be at least 12 characters' })
+    }
+
+    const userResult = await pool.query(
+      `select id, is_verified
+       from users
+       where id = $1
+       limit 1`,
+      [req.userId]
+    )
+    if (userResult.rowCount === 0) {
+      return res.status(404).json({ error: 'User not found' })
+    }
+    if (userResult.rows[0].is_verified === true) {
+      return res.status(400).json({ error: 'Profile is already verified' })
+    }
+
+    const pendingResult = await pool.query(
+      `select id,
+              user_id,
+              full_name,
+              reason,
+              evidence,
+              status,
+              admin_note,
+              reviewed_by,
+              reviewed_at,
+              created_at,
+              updated_at
+       from verification_requests
+       where user_id = $1
+         and status = 'pending'
+       order by created_at desc
+       limit 1`,
+      [req.userId]
+    )
+    if (pendingResult.rowCount > 0) {
+      return res.status(409).json({
+        error: 'Pending verification request already exists',
+        request: mapVerificationRequest(pendingResult.rows[0])
+      })
+    }
+
+    const created = await pool.query(
+      `insert into verification_requests (
+         user_id,
+         full_name,
+         reason,
+         evidence,
+         status,
+         created_at,
+         updated_at
+       )
+       values ($1, $2, $3, $4, 'pending', now(), now())
+       returning id,
+                 user_id,
+                 full_name,
+                 reason,
+                 evidence,
+                 status,
+                 admin_note,
+                 reviewed_by,
+                 reviewed_at,
+                 created_at,
+                 updated_at`,
+      [req.userId, fullName, reason, evidence]
+    )
+
+    res.status(201).json({ ok: true, request: mapVerificationRequest(created.rows[0]) })
+  } catch (err) {
+    if (isVerificationSchemaError(err)) {
+      return res.status(503).json({ error: 'Verification requests feature is unavailable: database migration required' })
+    }
+    if (err && err.code === '23505') {
+      return res.status(409).json({ error: 'Pending verification request already exists' })
+    }
+    console.error('Create verification request error', err)
+    res.status(500).json({ error: 'Unexpected error' })
+  }
+})
+
+app.post('/api/me/verification-request/cancel', auth, ensureNotBanned, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `update verification_requests vr
+       set status = 'cancelled',
+           updated_at = now(),
+           admin_note = null,
+           reviewed_by = null,
+           reviewed_at = null
+       where vr.id = (
+         select id
+         from verification_requests
+         where user_id = $1
+           and status = 'pending'
+         order by created_at desc
+         limit 1
+       )
+       returning id,
+                 user_id,
+                 full_name,
+                 reason,
+                 evidence,
+                 status,
+                 admin_note,
+                 reviewed_by,
+                 reviewed_at,
+                 created_at,
+                 updated_at`,
+      [req.userId]
+    )
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'Pending verification request not found' })
+    }
+    res.json({ ok: true, request: mapVerificationRequest(result.rows[0]) })
+  } catch (err) {
+    if (isVerificationSchemaError(err)) {
+      return res.status(503).json({ error: 'Verification requests feature is unavailable: database migration required' })
+    }
+    console.error('Cancel verification request error', err)
     res.status(500).json({ error: 'Unexpected error' })
   }
 })
@@ -4594,6 +4817,32 @@ app.post('/api/admin/verify', auth, adminOnly, async (req, res) => {
       return res.status(404).json({ error: 'User not found' })
     }
 
+    if (verified) {
+      try {
+        await pool.query(
+          `update verification_requests vr
+           set status = 'approved',
+               admin_note = coalesce(vr.admin_note, ''),
+               reviewed_by = $2,
+               reviewed_at = now(),
+               updated_at = now()
+           where vr.id = (
+             select id
+             from verification_requests
+             where user_id = $1
+               and status = 'pending'
+             order by created_at desc
+             limit 1
+           )`,
+          [userId, req.userId]
+        )
+      } catch (verificationErr) {
+        if (!isVerificationSchemaError(verificationErr)) {
+          throw verificationErr
+        }
+      }
+    }
+
     res.json({
       ok: true,
       user: {
@@ -4608,6 +4857,222 @@ app.post('/api/admin/verify', auth, adminOnly, async (req, res) => {
     }
     console.error('Admin verify error', err)
     res.status(500).json({ error: 'Unexpected error' })
+  }
+})
+
+app.get('/api/admin/verification-requests', auth, adminOnly, async (req, res) => {
+  try {
+    const rawStatus = String(req.query.status || 'pending').trim().toLowerCase()
+    const statusFilter = rawStatus === 'all' ? 'all' : normalizeVerificationRequestStatus(rawStatus)
+    const query = String(req.query.q || '').trim()
+    const queryLike = `%${query}%`
+
+    let result
+    try {
+      result = await pool.query(
+        `select vr.id,
+                vr.user_id,
+                vr.full_name,
+                vr.reason,
+                vr.evidence,
+                vr.status,
+                vr.admin_note,
+                vr.reviewed_by,
+                reviewer.username as reviewed_by_username,
+                vr.reviewed_at,
+                vr.created_at,
+                vr.updated_at,
+                u.username,
+                u.display_name,
+                u.avatar_url,
+                u.role,
+                coalesce(
+                  (select array_agg(ur.role_value order by ur.role_value asc)
+                   from user_roles ur
+                   where ur.user_id = u.id),
+                  array[u.role]
+                ) as roles,
+                u.is_verified
+         from verification_requests vr
+         join users u on u.id = vr.user_id
+         left join users reviewer on reviewer.id = vr.reviewed_by
+         where ($1 = 'all' or vr.status = $1)
+           and ($2 = '' or u.username ilike $3 or coalesce(u.display_name, '') ilike $3)
+         order by
+           case when vr.status = 'pending' then 0 else 1 end,
+           vr.created_at desc
+         limit 200`,
+        [statusFilter, query, queryLike]
+      )
+    } catch (err) {
+      if (!(err && err.code === '42P01' && String(err.message || '').toLowerCase().includes('user_roles'))) {
+        throw err
+      }
+      result = await pool.query(
+        `select vr.id,
+                vr.user_id,
+                vr.full_name,
+                vr.reason,
+                vr.evidence,
+                vr.status,
+                vr.admin_note,
+                vr.reviewed_by,
+                reviewer.username as reviewed_by_username,
+                vr.reviewed_at,
+                vr.created_at,
+                vr.updated_at,
+                u.username,
+                u.display_name,
+                u.avatar_url,
+                u.role,
+                array[u.role] as roles,
+                u.is_verified
+         from verification_requests vr
+         join users u on u.id = vr.user_id
+         left join users reviewer on reviewer.id = vr.reviewed_by
+         where ($1 = 'all' or vr.status = $1)
+           and ($2 = '' or u.username ilike $3 or coalesce(u.display_name, '') ilike $3)
+         order by
+           case when vr.status = 'pending' then 0 else 1 end,
+           vr.created_at desc
+         limit 200`,
+        [statusFilter, query, queryLike]
+      )
+    }
+
+    const requests = result.rows.map((row) => ({
+      ...mapVerificationRequest(row),
+      user: {
+        id: row.user_id,
+        username: row.username,
+        displayName: row.display_name || '',
+        avatarUrl: row.avatar_url || '',
+        role: row.role || '',
+        roles: normalizeUserRolesFromRow(row),
+        isVerified: row.is_verified === true
+      }
+    }))
+
+    res.json({ requests })
+  } catch (err) {
+    if (isVerificationSchemaError(err)) {
+      return res.status(503).json({ error: 'Verification requests feature is unavailable: database migration required' })
+    }
+    console.error('Admin verification requests error', err)
+    res.status(500).json({ error: 'Unexpected error' })
+  }
+})
+
+app.post('/api/admin/verification-requests/:id/review', auth, adminOnly, async (req, res) => {
+  const requestId = req.params.id
+  const decision = normalizeVerificationRequestStatus(req.body.decision, '')
+  const adminNote = normalizeVerificationRequestAdminNote(req.body.adminNote)
+
+  if (decision !== 'approved' && decision !== 'rejected') {
+    return res.status(400).json({ error: 'Decision must be approved or rejected' })
+  }
+
+  const client = await pool.connect()
+  try {
+    await client.query('begin')
+    const current = await client.query(
+      `select id,
+              user_id,
+              status
+       from verification_requests
+       where id = $1
+       limit 1
+       for update`,
+      [requestId]
+    )
+    if (current.rowCount === 0) {
+      await client.query('rollback')
+      return res.status(404).json({ error: 'Verification request not found' })
+    }
+
+    const currentStatus = normalizeVerificationRequestStatus(current.rows[0].status, '')
+    if (currentStatus !== 'pending') {
+      await client.query('rollback')
+      return res.status(409).json({ error: 'Verification request is already reviewed' })
+    }
+
+    const updated = await client.query(
+      `update verification_requests
+       set status = $2,
+           admin_note = $3,
+           reviewed_by = $4,
+           reviewed_at = now(),
+           updated_at = now()
+       where id = $1
+       returning id,
+                 user_id,
+                 full_name,
+                 reason,
+                 evidence,
+                 status,
+                 admin_note,
+                 reviewed_by,
+                 reviewed_at,
+                 created_at,
+                 updated_at`,
+      [requestId, decision, adminNote || null, req.userId]
+    )
+
+    if (decision === 'approved') {
+      await client.query(
+        `update users
+         set is_verified = true
+         where id = $1`,
+        [current.rows[0].user_id]
+      )
+    }
+
+    await client.query('commit')
+
+    const reviewer = await pool.query(
+      `select username
+       from users
+       where id = $1
+       limit 1`,
+      [req.userId]
+    )
+    const request = {
+      ...mapVerificationRequest(updated.rows[0]),
+      reviewedByUsername: reviewer.rowCount > 0 ? reviewer.rows[0].username : ''
+    }
+
+    const userResult = await pool.query(
+      `select id, username, is_verified
+       from users
+       where id = $1
+       limit 1`,
+      [current.rows[0].user_id]
+    )
+
+    res.json({
+      ok: true,
+      request,
+      user: userResult.rowCount > 0
+        ? {
+          id: userResult.rows[0].id,
+          username: userResult.rows[0].username,
+          isVerified: userResult.rows[0].is_verified === true
+        }
+        : null
+    })
+  } catch (err) {
+    try {
+      await client.query('rollback')
+    } catch (_rollbackErr) {
+      // ignore rollback errors
+    }
+    if (isVerificationSchemaError(err)) {
+      return res.status(503).json({ error: 'Verification requests feature is unavailable: database migration required' })
+    }
+    console.error('Admin review verification request error', err)
+    res.status(500).json({ error: 'Unexpected error' })
+  } finally {
+    client.release()
   }
 })
 

@@ -7,6 +7,7 @@ import {
   getConversations,
   getHealth,
   getMe,
+  getMyVerificationRequest,
   getMessages,
   markConversationRead,
   setConversationFavorite,
@@ -32,6 +33,8 @@ import {
   uploadBanner,
   uploadProfileTrack,
   updateMe,
+  createMyVerificationRequest,
+  cancelMyVerificationRequest,
   addComment,
   editMessage,
   deleteMessage,
@@ -45,6 +48,8 @@ import {
   adminSetModerator,
   adminClearWarnings,
   adminSetVerified,
+  adminListVerificationRequests,
+  adminReviewVerificationRequest,
   adminCreateRole,
   adminSetUserRole,
   toggleSubscription,
@@ -128,6 +133,23 @@ const initialLogin = {
   password: ''
 }
 
+const verificationStatusOptions = [
+  { value: 'pending', label: 'На проверке' },
+  { value: 'approved', label: 'Одобрено' },
+  { value: 'rejected', label: 'Отклонено' },
+  { value: 'cancelled', label: 'Отменено' }
+]
+
+const verificationStatusLabelByValue = new Map(
+  verificationStatusOptions.map((item) => [item.value, item.label])
+)
+
+const initialVerificationForm = {
+  fullName: '',
+  reason: '',
+  evidence: ''
+}
+
 function formatTime(value) {
   if (!value) return ''
   const date = new Date(value)
@@ -140,11 +162,46 @@ function formatDate(value) {
   return date.toLocaleDateString('ru-RU', { day: '2-digit', month: 'short' })
 }
 
+function formatDateTime(value) {
+  if (!value) return ''
+  const date = new Date(value)
+  return date.toLocaleString('ru-RU', {
+    day: '2-digit',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+}
+
 function formatDuration(ms) {
   const total = Math.max(0, Math.floor(ms / 1000))
   const minutes = Math.floor(total / 60)
   const seconds = total % 60
   return `${minutes}:${seconds.toString().padStart(2, '0')}`
+}
+
+function normalizeVerificationStatus(value) {
+  const status = String(value || '').trim().toLowerCase()
+  return verificationStatusLabelByValue.has(status) ? status : 'pending'
+}
+
+function normalizeVerificationRequest(value) {
+  if (!value || typeof value !== 'object') return null
+  return {
+    id: String(value.id || ''),
+    userId: String(value.userId || value.user_id || ''),
+    fullName: String(value.fullName || value.full_name || '').trim(),
+    reason: String(value.reason || '').trim(),
+    evidence: String(value.evidence || '').trim(),
+    status: normalizeVerificationStatus(value.status),
+    adminNote: String(value.adminNote || value.admin_note || '').trim(),
+    reviewedBy: String(value.reviewedBy || value.reviewed_by || ''),
+    reviewedByUsername: String(value.reviewedByUsername || value.reviewed_by_username || ''),
+    createdAt: value.createdAt || value.created_at || '',
+    updatedAt: value.updatedAt || value.updated_at || '',
+    reviewedAt: value.reviewedAt || value.reviewed_at || '',
+    user: value.user && typeof value.user === 'object' ? value.user : null
+  }
 }
 
 function extractHashtags(text) {
@@ -1655,6 +1712,13 @@ export default function App() {
   const [adminWarnReason, setAdminWarnReason] = useState({})
   const [adminRoleDraft, setAdminRoleDraft] = useState({ value: '', label: '' })
   const [adminRoleByUser, setAdminRoleByUser] = useState({})
+  const [adminVerificationRequests, setAdminVerificationRequests] = useState([])
+  const [adminVerificationFilter, setAdminVerificationFilter] = useState('pending')
+  const [adminVerificationLoading, setAdminVerificationLoading] = useState(false)
+  const [adminVerificationNoteByRequest, setAdminVerificationNoteByRequest] = useState({})
+  const [verificationRequest, setVerificationRequest] = useState(null)
+  const [verificationForm, setVerificationForm] = useState({ ...initialVerificationForm })
+  const [verificationSubmitting, setVerificationSubmitting] = useState(false)
   const [lightboxImage, setLightboxImage] = useState('')
   const [miniProfileCard, setMiniProfileCard] = useState(INITIAL_MINI_PROFILE_CARD_STATE)
   const [pushState, setPushState] = useState({
@@ -3945,6 +4009,38 @@ export default function App() {
   }, [user ? user.id : null])
 
   useEffect(() => {
+    if (!user || !user.id) {
+      setVerificationRequest(null)
+      setVerificationForm({ ...initialVerificationForm })
+      return
+    }
+
+    let cancelled = false
+    const loadMyVerificationRequest = async () => {
+      try {
+        const data = await getMyVerificationRequest()
+        if (cancelled) return
+        setVerificationRequest(normalizeVerificationRequest(data && data.request))
+      } catch (_err) {
+        if (cancelled) return
+        setVerificationRequest(null)
+      } finally {
+        if (!cancelled) {
+          setVerificationForm((prev) => ({
+            ...prev,
+            fullName: prev.fullName || user.displayName || user.username || ''
+          }))
+        }
+      }
+    }
+
+    loadMyVerificationRequest()
+    return () => {
+      cancelled = true
+    }
+  }, [user ? user.id : null, user ? user.displayName : '', user ? user.username : ''])
+
+  useEffect(() => {
     if (!user) return
     const allowed = ['dashboard', 'feed', 'chats', 'profile']
     if (user.isAdmin) allowed.push('admin')
@@ -3956,6 +4052,12 @@ export default function App() {
       }
     }
   }, [view, user])
+
+  useEffect(() => {
+    if (!user || !user.isAdmin || view !== 'admin') return
+    loadAdminUsers(adminQuery)
+    loadAdminVerificationRequests(adminVerificationFilter, adminQuery)
+  }, [view, user ? user.id : null, user ? user.isAdmin : false])
 
   useEffect(() => {
     viewRef.current = view
@@ -5560,6 +5662,91 @@ export default function App() {
     }
   }
 
+  const loadAdminVerificationRequests = async (status = adminVerificationFilter, query = adminQuery) => {
+    setAdminVerificationLoading(true)
+    try {
+      const data = await adminListVerificationRequests(status || 'pending', query || '')
+      setAdminVerificationRequests(
+        Array.isArray(data && data.requests)
+          ? data.requests.map((item) => normalizeVerificationRequest(item)).filter(Boolean)
+          : []
+      )
+    } catch (err) {
+      setStatus({ type: 'error', message: err.message })
+    } finally {
+      setAdminVerificationLoading(false)
+    }
+  }
+
+  const handleCreateVerificationRequest = async () => {
+    if (!user) return
+    const payload = {
+      fullName: String(verificationForm.fullName || '').trim(),
+      reason: String(verificationForm.reason || '').trim(),
+      evidence: String(verificationForm.evidence || '').trim()
+    }
+
+    if (payload.fullName.length < 2) {
+      setStatus({ type: 'error', message: 'Укажи имя минимум из 2 символов.' })
+      return
+    }
+    if (payload.reason.length < 12) {
+      setStatus({ type: 'error', message: 'Опиши причину минимум в 12 символов.' })
+      return
+    }
+
+    setVerificationSubmitting(true)
+    try {
+      const data = await createMyVerificationRequest(payload)
+      setVerificationRequest(normalizeVerificationRequest(data && data.request))
+      setStatus({ type: 'success', message: 'Заявка на верификацию отправлена.' })
+      if (view === 'admin' && user.isAdmin) {
+        loadAdminVerificationRequests(adminVerificationFilter, adminQuery)
+      }
+    } catch (err) {
+      setStatus({ type: 'error', message: err.message })
+    } finally {
+      setVerificationSubmitting(false)
+    }
+  }
+
+  const handleCancelVerificationRequest = async () => {
+    setVerificationSubmitting(true)
+    try {
+      const data = await cancelMyVerificationRequest()
+      setVerificationRequest(normalizeVerificationRequest(data && data.request))
+      setStatus({ type: 'info', message: 'Заявка отменена.' })
+    } catch (err) {
+      setStatus({ type: 'error', message: err.message })
+    } finally {
+      setVerificationSubmitting(false)
+    }
+  }
+
+  const handleAdminReviewVerification = async (requestItem, decision) => {
+    const requestId = requestItem && requestItem.id ? requestItem.id : ''
+    if (!requestId) return
+    const adminNote = String(adminVerificationNoteByRequest[requestId] || '').trim()
+
+    try {
+      const response = await adminReviewVerificationRequest(requestId, decision, adminNote)
+      if (response && response.user && user && response.user.id === user.id) {
+        setUser((prev) => (prev ? { ...prev, isVerified: response.user.isVerified === true } : prev))
+      }
+      setAdminVerificationNoteByRequest((prev) => ({ ...prev, [requestId]: '' }))
+      await Promise.all([
+        loadAdminVerificationRequests(adminVerificationFilter, adminQuery),
+        loadAdminUsers(adminQuery)
+      ])
+      setStatus({
+        type: 'success',
+        message: decision === 'approved' ? 'Заявка одобрена.' : 'Заявка отклонена.'
+      })
+    } catch (err) {
+      setStatus({ type: 'error', message: err.message })
+    }
+  }
+
   const handleAdminCreateRole = async () => {
     const value = String(adminRoleDraft.value || '').trim().toLowerCase()
     const label = String(adminRoleDraft.label || '').trim()
@@ -5657,6 +5844,13 @@ export default function App() {
     setTrackTitle('')
     setTrackArtist('')
     setTrackFile(null)
+    setVerificationRequest(null)
+    setVerificationForm({ ...initialVerificationForm })
+    setVerificationSubmitting(false)
+    setAdminVerificationRequests([])
+    setAdminVerificationFilter('pending')
+    setAdminVerificationLoading(false)
+    setAdminVerificationNoteByRequest({})
     setDashboardFeedQuery('')
     dashboardRefreshLoadingRef.current = false
     setDashboardRefreshLoading(false)
@@ -7844,6 +8038,26 @@ export default function App() {
   const profileViewRoleLabels = useMemo(() => (
     getUserRoleList(profileView).map((value) => roleLabelByValue.get(value) || value)
   ), [profileView, roleLabelByValue])
+  const verificationRequestStatus = verificationRequest ? normalizeVerificationStatus(verificationRequest.status) : ''
+  const verificationRequestStatusLabel = verificationRequestStatus
+    ? (verificationStatusLabelByValue.get(verificationRequestStatus) || 'На проверке')
+    : 'Нет заявки'
+  const canCreateVerificationRequest = Boolean(user && !user.isVerified && verificationRequestStatus !== 'pending')
+  const adminVerificationRows = useMemo(() => (
+    (adminVerificationRequests || []).map((item) => {
+      const normalized = normalizeVerificationRequest(item)
+      if (!normalized) return null
+      const targetUser = normalized.user && typeof normalized.user === 'object' ? normalized.user : {}
+      const roleLabels = getUserRoleList(targetUser).map((value) => roleLabelByValue.get(value) || value)
+      return {
+        ...normalized,
+        user: {
+          ...targetUser,
+          roleLabels: roleLabels.length > 0 ? roleLabels : ['Студент']
+        }
+      }
+    }).filter(Boolean)
+  ), [adminVerificationRequests, roleLabelByValue])
   const globalPaletteQueryNormalized = String(globalPaletteQuery || '').trim().toLowerCase()
   const globalPaletteActions = getGlobalPaletteActions()
   const globalPaletteVisibleActions = (globalPaletteQueryNormalized
@@ -8061,10 +8275,7 @@ export default function App() {
               <button
                 type="button"
                 className={view === 'admin' ? 'active' : ''}
-                onClick={() => {
-                  setView('admin')
-                  loadAdminUsers(adminQuery)
-                }}
+                onClick={() => setView('admin')}
                 title="Админ"
               >
                 {icons.admin}
@@ -10957,7 +11168,10 @@ export default function App() {
                 value={adminQuery}
                 onChange={(event) => setAdminQuery(event.target.value)}
               />
-              <button type="button" className="primary" onClick={() => loadAdminUsers(adminQuery)}>
+              <button type="button" className="primary" onClick={() => {
+                loadAdminUsers(adminQuery)
+                loadAdminVerificationRequests(adminVerificationFilter, adminQuery)
+              }}>
                 Найти
               </button>
             </div>
@@ -10981,6 +11195,115 @@ export default function App() {
                 </button>
               </div>
             </div>
+            <section className="admin-verify-section">
+              <div className="admin-verify-head">
+                <strong>Verification requests</strong>
+                <div className="admin-verify-filters">
+                  {[
+                    { value: 'pending', label: 'Pending' },
+                    { value: 'approved', label: 'Approved' },
+                    { value: 'rejected', label: 'Rejected' },
+                    { value: 'cancelled', label: 'Cancelled' },
+                    { value: 'all', label: 'All' }
+                  ].map((item) => (
+                    <button
+                      key={`verification-filter-${item.value}`}
+                      type="button"
+                      className={adminVerificationFilter === item.value ? 'active' : ''}
+                      onClick={() => {
+                        setAdminVerificationFilter(item.value)
+                        loadAdminVerificationRequests(item.value, adminQuery)
+                      }}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    className="ghost"
+                    onClick={() => loadAdminVerificationRequests(adminVerificationFilter, adminQuery)}
+                  >
+                    Refresh
+                  </button>
+                </div>
+              </div>
+              {adminVerificationLoading ? (
+                <div className="empty small">Loading requests...</div>
+              ) : adminVerificationRows.length === 0 ? (
+                <div className="empty small">No verification requests.</div>
+              ) : (
+                <div className="admin-verify-list">
+                  {adminVerificationRows.map((item) => (
+                    <article key={item.id} className={`admin-verify-item status-${item.status}`.trim()}>
+                      <div className="admin-verify-user">
+                        <div
+                          className="avatar tiny with-mini-profile"
+                          onMouseEnter={(event) => queueMiniProfileCard(event, item.user)}
+                          onMouseMove={moveMiniProfileCard}
+                          onMouseLeave={() => hideMiniProfileCard()}
+                        >
+                          {item.user.avatarUrl ? (
+                            <img src={resolveMediaUrl(item.user.avatarUrl)} alt="avatar" />
+                          ) : (
+                            (item.user.username || 'U')[0].toUpperCase()
+                          )}
+                        </div>
+                        <div>
+                          <strong>
+                            {item.user.displayName || item.user.username}
+                            {item.user.isVerified ? <span className="verified-mark" title="Verified">✓</span> : null}
+                          </strong>
+                          <span>@{item.user.username}</span>
+                          <div className="admin-badges">
+                            {(Array.isArray(item.user.roleLabels) ? item.user.roleLabels : ['Студент']).map((roleLabel, idx) => (
+                              <span key={`${item.id}-verify-role-${idx}`} className="badge role">{roleLabel}</span>
+                            ))}
+                          </div>
+                        </div>
+                        <span className={`verification-status-badge ${item.status}`.trim()}>
+                          {verificationStatusLabelByValue.get(item.status) || item.status}
+                        </span>
+                      </div>
+                      <p className="admin-verify-reason">{item.reason}</p>
+                      {item.evidence ? <p className="admin-verify-evidence">Proof: {item.evidence}</p> : null}
+                      <div className="admin-verify-meta">
+                        <span>Submitted: {formatDateTime(item.createdAt)}</span>
+                        {item.reviewedAt ? <span>Reviewed: {formatDateTime(item.reviewedAt)}</span> : null}
+                        {item.reviewedByUsername ? <span>Admin: @{item.reviewedByUsername}</span> : null}
+                      </div>
+                      {item.adminNote ? <div className="admin-verify-note">{item.adminNote}</div> : null}
+                      {item.status === 'pending' ? (
+                        <div className="admin-verify-actions">
+                          <input
+                            type="text"
+                            value={adminVerificationNoteByRequest[item.id] || ''}
+                            onChange={(event) => setAdminVerificationNoteByRequest((prev) => ({
+                              ...prev,
+                              [item.id]: event.target.value
+                            }))}
+                            placeholder="Admin note (optional)"
+                          />
+                          <button
+                            type="button"
+                            className="primary"
+                            onClick={() => handleAdminReviewVerification(item, 'approved')}
+                          >
+                            Approve
+                          </button>
+                          <button
+                            type="button"
+                            className="ghost"
+                            onClick={() => handleAdminReviewVerification(item, 'rejected')}
+                          >
+                            Reject
+                          </button>
+                        </div>
+                      ) : null}
+                    </article>
+                  ))}
+                </div>
+              )}
+            </section>
             <div className="admin-list">
               {adminUsers.length === 0 && <div className="empty">Пользователи не найдены.</div>}
               {adminUsers.map((u) => (
@@ -11030,7 +11353,14 @@ export default function App() {
                     <button
                       type="button"
                       onClick={() =>
-                        adminSetVerified(u.id, !u.is_verified).then(() => loadAdminUsers(adminQuery))
+                        adminSetVerified(u.id, !u.is_verified)
+                          .then(async () => {
+                            await Promise.all([
+                              loadAdminUsers(adminQuery),
+                              loadAdminVerificationRequests(adminVerificationFilter, adminQuery)
+                            ])
+                          })
+                          .catch((err) => setStatus({ type: 'error', message: err.message }))
                       }
                     >
                       {u.is_verified ? 'Снять верификацию' : 'Верифицировать'}
@@ -11265,6 +11595,89 @@ export default function App() {
                 ))}
               </select>
             </label>
+            <section className="profile-verification-card">
+              <div className="profile-verification-head">
+                <h3>Verification</h3>
+                <span className={`verification-status-badge ${user.isVerified ? 'approved' : (verificationRequestStatus || 'none')}`.trim()}>
+                  {user.isVerified ? 'Verified' : verificationRequestStatusLabel}
+                </span>
+              </div>
+              {user.isVerified ? (
+                <p className="profile-verification-text">
+                  Profile is verified by admins. The checkmark is visible in profile and mini profile.
+                </p>
+              ) : (
+                <>
+                  {verificationRequest ? (
+                    <div className="profile-verification-meta">
+                      <span>Submitted: {formatDateTime(verificationRequest.createdAt) || 'just now'}</span>
+                      {verificationRequest.reviewedAt ? (
+                        <span>Reviewed: {formatDateTime(verificationRequest.reviewedAt)}</span>
+                      ) : null}
+                    </div>
+                  ) : null}
+                  {verificationRequest && verificationRequest.status === 'pending' ? (
+                    <p className="profile-verification-text">Request is under review. You can cancel and submit a new one.</p>
+                  ) : null}
+                  {verificationRequest && verificationRequest.status === 'rejected' ? (
+                    <p className="profile-verification-text">
+                      Request was rejected.
+                      {verificationRequest.adminNote ? ` Note: ${verificationRequest.adminNote}` : ' Update details and send again.'}
+                    </p>
+                  ) : null}
+                  {verificationRequest && verificationRequest.status === 'cancelled' ? (
+                    <p className="profile-verification-text">Previous request was cancelled. You can submit a new one.</p>
+                  ) : null}
+                  {canCreateVerificationRequest ? (
+                    <div className="profile-verification-form">
+                      <input
+                        type="text"
+                        value={verificationForm.fullName}
+                        onChange={(event) => setVerificationForm((prev) => ({ ...prev, fullName: event.target.value }))}
+                        placeholder="Real full name"
+                        maxLength={80}
+                      />
+                      <textarea
+                        rows={3}
+                        value={verificationForm.reason}
+                        onChange={(event) => setVerificationForm((prev) => ({ ...prev, reason: event.target.value }))}
+                        placeholder="Why profile should be verified"
+                        maxLength={360}
+                      />
+                      <input
+                        type="text"
+                        value={verificationForm.evidence}
+                        onChange={(event) => setVerificationForm((prev) => ({ ...prev, evidence: event.target.value }))}
+                        placeholder="Public link or contact (optional)"
+                        maxLength={220}
+                      />
+                      <div className="profile-verification-actions">
+                        <button
+                          type="button"
+                          className="primary"
+                          onClick={handleCreateVerificationRequest}
+                          disabled={verificationSubmitting}
+                        >
+                          {verificationSubmitting ? 'Sending...' : 'Submit verification request'}
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+                  {verificationRequest && verificationRequest.status === 'pending' ? (
+                    <div className="profile-verification-actions">
+                      <button
+                        type="button"
+                        className="ghost"
+                        onClick={handleCancelVerificationRequest}
+                        disabled={verificationSubmitting}
+                      >
+                        {verificationSubmitting ? 'Please wait...' : 'Cancel request'}
+                      </button>
+                    </div>
+                  ) : null}
+                </>
+              )}
+            </section>
             <label>
               О себе
               <textarea
@@ -11819,10 +12232,7 @@ export default function App() {
             <button
               type="button"
               className={view === 'admin' ? 'active' : ''}
-              onClick={() => {
-                setView('admin')
-                loadAdminUsers(adminQuery)
-              }}
+              onClick={() => setView('admin')}
               title="Админ"
             >
               {icons.admin}

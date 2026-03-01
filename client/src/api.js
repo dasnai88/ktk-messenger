@@ -96,6 +96,18 @@ export async function getMe() {
   return request('/me')
 }
 
+export async function getMyVerificationRequest() {
+  return request('/me/verification-request')
+}
+
+export async function createMyVerificationRequest(payload) {
+  return request('/me/verification-request', { method: 'POST', body: payload })
+}
+
+export async function cancelMyVerificationRequest() {
+  return request('/me/verification-request/cancel', { method: 'POST' })
+}
+
 export async function updateMe(payload) {
   return request('/me', { method: 'PATCH', body: payload })
 }
@@ -480,6 +492,21 @@ export async function adminClearWarnings(userId) {
 
 export async function adminSetVerified(userId, verified) {
   return request('/admin/verify', { method: 'POST', body: { userId, verified } })
+}
+
+export async function adminListVerificationRequests(status = 'pending', query = '') {
+  const params = new URLSearchParams({
+    status: status || 'pending',
+    q: query || ''
+  })
+  return request(`/admin/verification-requests?${params.toString()}`)
+}
+
+export async function adminReviewVerificationRequest(requestId, decision, adminNote = '') {
+  return request(`/admin/verification-requests/${requestId}/review`, {
+    method: 'POST',
+    body: { decision, adminNote }
+  })
 }
 
 export async function adminCreateRole(value, label) {

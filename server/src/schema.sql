@@ -213,6 +213,20 @@ create table if not exists warnings (
   created_at timestamptz default now()
 );
 
+create table if not exists verification_requests (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references users(id) on delete cascade,
+  full_name text not null,
+  reason text not null,
+  evidence text,
+  status text not null default 'pending' check (status in ('pending', 'approved', 'rejected', 'cancelled')),
+  admin_note text,
+  reviewed_by uuid references users(id) on delete set null,
+  reviewed_at timestamptz,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
 create table if not exists post_likes (
   post_id uuid references posts(id) on delete cascade,
   user_id uuid references users(id) on delete cascade,
@@ -253,6 +267,9 @@ create index if not exists idx_message_poll_votes_message on message_poll_votes 
 create index if not exists idx_message_poll_votes_user on message_poll_votes (user_id);
 create index if not exists idx_posts_created on posts (created_at desc);
 create index if not exists idx_post_comments_post on post_comments (post_id, created_at);
+create index if not exists idx_verification_requests_user_status on verification_requests (user_id, status, created_at desc);
+create index if not exists idx_verification_requests_status_created on verification_requests (status, created_at desc);
+create unique index if not exists idx_verification_requests_user_pending on verification_requests (user_id) where status = 'pending';
 
 -- safe alters for existing databases
 DO $$ BEGIN
