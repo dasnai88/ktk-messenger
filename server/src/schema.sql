@@ -50,6 +50,7 @@ create table if not exists users (
   is_admin boolean default false,
   is_moderator boolean default false,
   is_banned boolean default false,
+  is_verified boolean default false,
   warnings_count integer default 0,
   created_at timestamptz default now()
 );
@@ -562,6 +563,10 @@ EXCEPTION WHEN duplicate_column THEN END $$;
 
 DO $$ BEGIN
   ALTER TABLE users ADD COLUMN warnings_count integer default 0;
+EXCEPTION WHEN duplicate_column THEN END $$;
+
+DO $$ BEGIN
+  ALTER TABLE users ADD COLUMN is_verified boolean default false;
 EXCEPTION WHEN duplicate_column THEN END $$;
 
 DO $$

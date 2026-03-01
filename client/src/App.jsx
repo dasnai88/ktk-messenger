@@ -44,6 +44,7 @@ import {
   adminWarnUser,
   adminSetModerator,
   adminClearWarnings,
+  adminSetVerified,
   adminCreateRole,
   adminSetUserRole,
   toggleSubscription,
@@ -6635,6 +6636,7 @@ export default function App() {
     const displayName = String(rawUser.displayName || username || 'Пользователь').trim()
     const statusEmoji = String(rawUser.statusEmoji || '').trim()
     const statusText = String(rawUser.statusText || '').trim()
+    const isVerified = rawUser.isVerified === true || rawUser.is_verified === true
     const onlineKnown = Object.prototype.hasOwnProperty.call(rawUser, 'online')
     return {
       id,
@@ -6642,6 +6644,7 @@ export default function App() {
       displayName,
       avatarUrl: rawUser.avatarUrl || '',
       roleLabels: roleLabels.length > 0 ? roleLabels : ['Студент'],
+      isVerified,
       statusEmoji,
       statusText,
       online: rawUser.online === true,
@@ -6665,6 +6668,7 @@ export default function App() {
       ...baseUser,
       ...extraUser,
       roleLabels: roleLabels.length > 0 ? roleLabels : ['Студент'],
+      isVerified: baseUser.isVerified === true || extraUser.isVerified === true,
       online,
       onlineKnown
     }
@@ -7837,6 +7841,9 @@ export default function App() {
     ? `profile-theme-${profileShowcase.heroTheme}`
     : 'profile-theme-default'
   const profileHeroHasBanner = Boolean(profileView && profileView.bannerUrl)
+  const profileViewRoleLabels = useMemo(() => (
+    getUserRoleList(profileView).map((value) => roleLabelByValue.get(value) || value)
+  ), [profileView, roleLabelByValue])
   const globalPaletteQueryNormalized = String(globalPaletteQuery || '').trim().toLowerCase()
   const globalPaletteActions = getGlobalPaletteActions()
   const globalPaletteVisibleActions = (globalPaletteQueryNormalized
@@ -10592,8 +10599,20 @@ export default function App() {
                   </div>
                   <div className="profile-hero-main">
                     <div>
-                      <h2>{profileView.displayName || profileView.username}</h2>
+                      <h2 className="profile-hero-name">
+                        {profileView.displayName || profileView.username}
+                        {profileView.isVerified && <span className="verified-mark" title="Верифицированный профиль">✓</span>}
+                      </h2>
                       <span>@{profileView.username}</span>
+                      {profileViewRoleLabels.length > 0 && (
+                        <div className="profile-role-row">
+                          {profileViewRoleLabels.map((label, index) => (
+                            <span key={`profile-role-${profileView.id}-${index}-${label}`} className="profile-role-chip">
+                              {label}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
                     {profileViewMoodLabel && <div className="profile-mood-chip profile-mood-profile">{profileViewMoodLabel}</div>}
                     {profileShowcase.headline && <p className="profile-headline">{profileShowcase.headline}</p>}
@@ -10972,6 +10991,7 @@ export default function App() {
                     <div className="admin-badges">
                       {u.is_admin && <span className="badge admin">ADMIN</span>}
                       {u.is_moderator && <span className="badge moder">MODER</span>}
+                      {u.is_verified && <span className="badge verified">VERIFIED</span>}
                       {getUserRoleList(u).map((roleValue) => (
                         <span key={`${u.id}-role-badge-${roleValue}`} className="badge role">
                           {roleLabelByValue.get(roleValue) || roleValue}
@@ -10985,6 +11005,7 @@ export default function App() {
                       Роли: {getUserRoleList(u).map((roleValue) => (roleLabelByValue.get(roleValue) || roleValue)).join(', ') || 'не заданы'}
                     </span>
                     <span>{u.is_banned ? 'БАН' : 'активен'}</span>
+                    <span>{u.is_verified ? 'верифицирован' : 'без верификации'}</span>
                   </div>
                   <div className="admin-actions">
                     <div className="admin-role-picker">
@@ -11005,6 +11026,14 @@ export default function App() {
                     </div>
                     <button type="button" onClick={() => handleAdminSetRoleForUser(u)}>
                       Сохранить роли
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        adminSetVerified(u.id, !u.is_verified).then(() => loadAdminUsers(adminQuery))
+                      }
+                    >
+                      {u.is_verified ? 'Снять верификацию' : 'Верифицировать'}
                     </button>
                     {u.is_banned ? (
                       <button type="button" onClick={() => adminUnbanUser(u.id).then(() => loadAdminUsers(adminQuery))}>
@@ -11681,7 +11710,10 @@ export default function App() {
                 )}
               </div>
               <div className="mini-profile-identity">
-                <strong>{miniProfileCard.user.displayName || miniProfileCard.user.username || 'Пользователь'}</strong>
+                <strong>
+                  {miniProfileCard.user.displayName || miniProfileCard.user.username || 'Пользователь'}
+                  {miniProfileCard.user.isVerified && <span className="verified-mark" title="Верифицированный профиль">✓</span>}
+                </strong>
                 {miniProfileCard.user.username && <span>@{miniProfileCard.user.username}</span>}
               </div>
               <span className={`mini-profile-presence ${miniProfileCard.user.online ? 'online' : ''}`.trim()}>

@@ -585,6 +585,7 @@ function mapUser(row) {
     avatarUrl: row.avatar_url,
     bannerUrl: row.banner_url,
     themeColor: row.theme_color,
+    isVerified: row.is_verified === true,
     isAdmin: row.is_admin,
     isModerator: row.is_moderator,
     isBanned: row.is_banned,
@@ -839,6 +840,7 @@ function mapOtherUser(row) {
     displayName: row.other_display_name,
     role: row.other_role,
     avatarUrl: row.other_avatar_url,
+    isVerified: row.other_is_verified === true,
     statusText: row.other_status_text || '',
     statusEmoji: row.other_status_emoji || ''
   }
@@ -1369,6 +1371,7 @@ async function getUserConversations(userId) {
             u.display_name as other_display_name,
             u.role as other_role,
             u.avatar_url as other_avatar_url,
+            u.is_verified as other_is_verified,
             u.status_text as other_status_text,
             u.status_emoji as other_status_emoji,
             lm.body as last_body,
@@ -1415,6 +1418,7 @@ async function getUserConversations(userId) {
             u.display_name as other_display_name,
             u.role as other_role,
             u.avatar_url as other_avatar_url,
+            null::boolean as other_is_verified,
             null::text as other_status_text,
             null::text as other_status_emoji,
             lm.body as last_body,
@@ -2448,6 +2452,7 @@ app.post('/api/conversations', auth, ensureNotBanned, async (req, res) => {
                 u.display_name as other_display_name,
                 u.role as other_role,
                 u.avatar_url as other_avatar_url,
+                u.is_verified as other_is_verified,
                 u.status_text as other_status_text,
                 u.status_emoji as other_status_emoji,
                 lm.body as last_body,
@@ -2480,6 +2485,7 @@ app.post('/api/conversations', auth, ensureNotBanned, async (req, res) => {
                 u.display_name as other_display_name,
                 u.role as other_role,
                 u.avatar_url as other_avatar_url,
+                null::boolean as other_is_verified,
                 null::text as other_status_text,
                 null::text as other_status_emoji,
                 lm.body as last_body,
@@ -4447,6 +4453,7 @@ app.get('/api/admin/users', auth, adminOnly, async (req, res) => {
                 ) as roles,
                 u.is_banned,
                 u.warnings_count,
+                u.is_verified,
                 u.is_admin,
                 u.is_moderator
          from users u
@@ -4457,7 +4464,7 @@ app.get('/api/admin/users', auth, adminOnly, async (req, res) => {
       )
       return res.json({ users: result.rows })
     } catch (err) {
-      if (!(err && err.code === '42P01')) {
+      if (!(err && (err.code === '42P01' || err.code === '42703'))) {
         throw err
       }
       const fallback = await pool.query(
@@ -4468,6 +4475,7 @@ app.get('/api/admin/users', auth, adminOnly, async (req, res) => {
                 array[u.role] as roles,
                 u.is_banned,
                 u.warnings_count,
+                false as is_verified,
                 u.is_admin,
                 u.is_moderator
          from users u
@@ -4562,6 +4570,43 @@ app.post('/api/admin/set-role', auth, adminOnly, async (req, res) => {
     })
   } catch (err) {
     console.error('Admin set role error', err)
+    res.status(500).json({ error: 'Unexpected error' })
+  }
+})
+
+app.post('/api/admin/verify', auth, adminOnly, async (req, res) => {
+  try {
+    const userId = req.body.userId
+    const verified = req.body.verified === true
+    if (!isValidUuid(userId)) {
+      return res.status(400).json({ error: 'Invalid user id' })
+    }
+
+    const result = await pool.query(
+      `update users
+       set is_verified = $2
+       where id = $1
+       returning id, username, is_verified`,
+      [userId, verified]
+    )
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'User not found' })
+    }
+
+    res.json({
+      ok: true,
+      user: {
+        id: result.rows[0].id,
+        username: result.rows[0].username,
+        isVerified: result.rows[0].is_verified === true
+      }
+    })
+  } catch (err) {
+    if (err && err.code === '42703') {
+      return res.status(503).json({ error: 'Verification column missing: schema migration required' })
+    }
+    console.error('Admin verify error', err)
     res.status(500).json({ error: 'Unexpected error' })
   }
 })
