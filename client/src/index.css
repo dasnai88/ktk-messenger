@@ -4462,15 +4462,15 @@ body {
 }
 
 .feed-toolbox {
-  background: linear-gradient(140deg, rgba(var(--accent-rgb), 0.16), rgba(var(--accent-2-rgb), 0.08));
-  border: 1px solid rgba(var(--accent-rgb), 0.3);
-  border-radius: 22px;
-  padding: 14px;
+  background: linear-gradient(155deg, rgba(var(--accent-rgb), 0.11), rgba(var(--accent-2-rgb), 0.05));
+  border: 1px solid rgba(var(--accent-rgb), 0.2);
+  border-radius: 18px;
+  padding: 12px;
   display: grid;
-  gap: 12px;
+  gap: 10px;
   position: relative;
   overflow: hidden;
-  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16);
 }
 
 .feed-toolbox::before {
@@ -4479,8 +4479,8 @@ body {
   inset: 0;
   pointer-events: none;
   background:
-    radial-gradient(circle at 100% 0%, rgba(var(--accent-rgb), 0.16), transparent 45%),
-    radial-gradient(circle at 0% 100%, rgba(var(--accent-2-rgb), 0.12), transparent 48%);
+    radial-gradient(circle at 100% 0%, rgba(var(--accent-rgb), 0.11), transparent 48%),
+    radial-gradient(circle at 0% 100%, rgba(var(--accent-2-rgb), 0.08), transparent 52%);
 }
 
 .feed-toolbox > * {
@@ -4581,21 +4581,46 @@ body {
 .feed-control-head {
   display: grid;
   grid-template-columns: 1fr auto;
-  gap: 12px;
-  align-items: center;
-  border: 1px solid rgba(var(--accent-rgb), 0.24);
-  background:
-    radial-gradient(circle at 15% 0%, rgba(var(--accent-rgb), 0.22), transparent 55%),
-    linear-gradient(155deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.01));
-  border-radius: 16px;
-  padding: 12px;
+  gap: 10px;
+  align-items: start;
+  border: 1px solid rgba(var(--accent-rgb), 0.2);
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.01));
+  border-radius: 14px;
+  padding: 10px 12px;
+}
+
+.feed-control-main {
+  display: grid;
+  gap: 5px;
+}
+
+.feed-control-kicker {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.45px;
+  color: var(--muted);
+}
+
+.feed-control-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.feed-control-summary span {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-size: 11px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.03);
 }
 
 .feed-control-head-actions {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: flex-end;
-  gap: 8px;
+  gap: 6px;
   flex-wrap: wrap;
 }
 
@@ -4606,9 +4631,39 @@ body {
 }
 
 .feed-control-head p {
-  margin: 4px 0 0;
+  margin: 0;
   color: var(--muted);
   font-size: 12px;
+}
+
+.feed-quick-action {
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 7px 11px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  transition: border-color var(--motion-fast) var(--ease-out), background var(--motion-fast) var(--ease-out), transform var(--motion-fast) var(--ease-out);
+}
+
+.feed-quick-action:hover {
+  border-color: rgba(var(--accent-rgb), 0.5);
+  transform: translateY(-1px);
+}
+
+.feed-quick-action.active {
+  border-color: rgba(var(--accent-rgb), 0.6);
+  background: rgba(var(--accent-rgb), 0.16);
+}
+
+.feed-quick-action.subtle {
+  opacity: 0.86;
 }
 
 .feed-live-chip {
@@ -4624,12 +4679,12 @@ body {
 }
 
 .feed-toolbox-toggle {
-  border: 1px solid rgba(var(--accent-rgb), 0.45);
-  background: linear-gradient(140deg, rgba(var(--accent-rgb), 0.24), rgba(var(--accent-2-rgb), 0.2));
+  border: 1px solid rgba(var(--accent-rgb), 0.4);
+  background: linear-gradient(140deg, rgba(var(--accent-rgb), 0.18), rgba(var(--accent-2-rgb), 0.14));
   color: var(--text);
   border-radius: 999px;
-  padding: 8px 14px;
-  font-size: 12px;
+  padding: 7px 12px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.2px;
   cursor: pointer;
@@ -4643,8 +4698,8 @@ body {
 }
 
 .feed-toolbox-toggle.active {
-  border-color: rgba(var(--accent-rgb), 0.75);
-  background: linear-gradient(140deg, rgba(var(--accent-rgb), 0.3), rgba(var(--accent-2-rgb), 0.24));
+  border-color: rgba(var(--accent-rgb), 0.62);
+  background: linear-gradient(140deg, rgba(var(--accent-rgb), 0.24), rgba(var(--accent-2-rgb), 0.18));
 }
 
 .feed-toolbox-panel {
@@ -5662,6 +5717,7 @@ body {
   }
 
   .feed-live-chip,
+  .feed-quick-action,
   .feed-toolbox-toggle {
     width: 100%;
     justify-content: center;

@@ -1515,6 +1515,7 @@ export default function App() {
   const draftsRef = useRef(draftsByConversation)
   const socketConnectionRef = useRef(socketConnection)
   const chatSearchInputRef = useRef(null)
+  const feedQueryInputRef = useRef(null)
   const composerInputRef = useRef(null)
   const contextMenuRef = useRef(null)
   const postMenuRef = useRef(null)
@@ -4047,6 +4048,19 @@ export default function App() {
         return
       }
 
+      if (key === '/' && view === 'feed') {
+        if (isTextInput) return
+        event.preventDefault()
+        setIsFeedToolboxOpen(true)
+        window.requestAnimationFrame(() => {
+          if (feedQueryInputRef.current) {
+            feedQueryInputRef.current.focus()
+            feedQueryInputRef.current.select()
+          }
+        })
+        return
+      }
+
       if (key === 'escape' && mediaPanelOpen) {
         event.preventDefault()
         setMediaPanelOpen(false)
@@ -5735,6 +5749,29 @@ export default function App() {
     setActiveFeedTag('')
     setFeedAuthorFilter('')
     setFeedExplorer({ ...DEFAULT_FEED_EXPLORER_SETTINGS })
+  }
+
+  const focusFeedQueryInput = () => {
+    if (!isFeedToolboxOpen) {
+      setIsFeedToolboxOpen(true)
+    }
+    window.requestAnimationFrame(() => {
+      if (feedQueryInputRef.current) {
+        feedQueryInputRef.current.focus()
+        feedQueryInputRef.current.select()
+      }
+    })
+  }
+
+  const cycleFeedSortMode = () => {
+    const options = FEED_SORT_TABS.map((item) => item.value)
+    const currentIndex = options.indexOf(effectiveFeedSortMode)
+    const nextIndex = currentIndex === -1 ? 0 : (currentIndex + 1) % options.length
+    const nextSortMode = options[nextIndex]
+    if (feedFilter === FEED_FILTERS.popular && nextSortMode !== FEED_SORT_MODES.engagement) {
+      setFeedFilter(FEED_FILTERS.all)
+    }
+    updateFeedExplorer({ sortMode: nextSortMode })
   }
 
   const toggleFeedAuthorFilter = (authorId) => {
@@ -9100,17 +9137,49 @@ export default function App() {
 
             <section className={`feed-toolbox ${isFeedToolboxOpen ? 'expanded' : 'collapsed'}`.trim()}>
               <div className="feed-control-head">
-                <div>
-                  <strong>Управление лентой</strong>
+                <div className="feed-control-main">
+                  <span className="feed-control-kicker">control center</span>
+                  <strong>Лента</strong>
                   <p>
                     {visibleFeedPosts.length} постов • сортировка {feedSortModeLabel} • окно {feedTimeWindowLabel}
                   </p>
+                  <div className="feed-control-summary" role="status" aria-live="polite">
+                    <span>{feedActiveFilterCount > 0 ? `${feedActiveFilterCount} фильтров` : 'без фильтров'}</span>
+                    <span>{feedExplorer.mediaOnly ? 'медиа only' : 'все посты'}</span>
+                    <span>layout: {feedExplorer.layout === FEED_LAYOUTS.compact ? 'compact' : 'cards'}</span>
+                  </div>
                 </div>
                 <div className="feed-control-head-actions">
-                  <div className="feed-live-chip" title="Активные настройки ленты">
-                    <span className={`dot ${feedActiveFilterCount > 0 ? 'active' : ''}`.trim()}></span>
-                    {feedActiveFilterCount > 0 ? `${feedActiveFilterCount} фильтров` : 'Базовый режим'}
-                  </div>
+                  <button
+                    type="button"
+                    className={`feed-quick-action ${feedExplorer.mediaOnly ? 'active' : ''}`.trim()}
+                    onClick={() => updateFeedExplorer({ mediaOnly: !feedExplorer.mediaOnly })}
+                  >
+                    Медиа
+                  </button>
+                  <button
+                    type="button"
+                    className="feed-quick-action"
+                    onClick={cycleFeedSortMode}
+                  >
+                    Сорт: {feedSortModeLabel}
+                  </button>
+                  <button
+                    type="button"
+                    className="feed-quick-action"
+                    onClick={focusFeedQueryInput}
+                  >
+                    Поиск /
+                  </button>
+                  {(feedActiveFilterCount > 0 || feedQuery || activeFeedTag || feedAuthorFilter || feedFilter !== FEED_FILTERS.all) && (
+                    <button
+                      type="button"
+                      className="feed-quick-action subtle"
+                      onClick={resetFeedFilters}
+                    >
+                      Сброс
+                    </button>
+                  )}
                   <button
                     type="button"
                     className={`feed-toolbox-toggle ${isFeedToolboxOpen ? 'active' : ''}`.trim()}
@@ -9123,7 +9192,7 @@ export default function App() {
                     aria-expanded={isFeedToolboxOpen}
                     aria-controls="feed-toolbox-panel"
                   >
-                    {isFeedToolboxOpen ? 'Скрыть фильтры' : 'Открыть фильтры'}
+                    {isFeedToolboxOpen ? 'Свернуть' : 'Фильтры'}
                   </button>
                 </div>
               </div>
@@ -9244,6 +9313,7 @@ export default function App() {
 
               <div className="feed-query-row">
                 <input
+                  ref={feedQueryInputRef}
                   type="text"
                   value={feedQuery}
                   onChange={(event) => setFeedQuery(normalizeFeedQueryValue(event.target.value))}
