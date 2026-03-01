@@ -18,6 +18,13 @@
   --accent-soft: #f2d4d4;
   --accent-ink: #fff7f7;
   --glow: 0 6px 16px rgba(var(--accent-rgb), 0.25);
+  --ui-glow-rgb: var(--accent-rgb);
+  --ui-glow-active-border: rgba(var(--accent-rgb), 0.62);
+  --ui-glow-active-bg: rgba(var(--accent-rgb), 0.18);
+  --ui-glow-ring: 0 0 0 1px rgba(var(--accent-rgb), 0.24);
+  --ui-glow-shadow-soft: 0 8px 18px rgba(var(--accent-rgb), 0.24);
+  --ui-glow-shadow-strong: 0 12px 24px rgba(var(--accent-rgb), 0.3);
+  --ui-glow-text: rgb(var(--accent-rgb));
   --panel-gradient: var(--panel);
   --panel-glass: rgba(23, 17, 19, 0.92);
   --surface-subtle: #1b1315;
@@ -6937,25 +6944,25 @@ pre,
 }
 
 .settings-nav button.active {
-  border-color: rgba(var(--settings-accent-rgb), 0.52);
-  background: linear-gradient(135deg, rgba(var(--settings-accent-rgb), 0.26), rgba(var(--settings-accent-rgb), 0.14));
+  border-color: var(--ui-glow-active-border);
+  background: linear-gradient(135deg, var(--ui-glow-active-bg), rgba(var(--ui-glow-rgb), 0.09));
   box-shadow:
-    0 0 0 1px rgba(var(--settings-accent-rgb), 0.26),
-    0 10px 22px rgba(var(--settings-accent-rgb), 0.24),
+    var(--ui-glow-ring),
+    var(--ui-glow-shadow-strong),
     inset 0 1px 0 rgba(255, 255, 255, 0.2);
   transform: translateX(2px);
 }
 
 .settings-nav button.active .settings-nav-icon {
-  color: rgb(var(--settings-accent-rgb));
-  text-shadow: 0 0 14px rgba(var(--settings-accent-rgb), 0.42);
+  color: var(--ui-glow-text);
+  text-shadow: 0 0 14px rgba(var(--ui-glow-rgb), 0.42);
 }
 
 .settings-nav button.active .settings-nav-badge {
-  border-color: rgba(var(--settings-accent-rgb), 0.55);
-  color: rgb(var(--settings-accent-rgb));
-  background: rgba(var(--settings-accent-rgb), 0.16);
-  box-shadow: 0 0 14px rgba(var(--settings-accent-rgb), 0.24);
+  border-color: var(--ui-glow-active-border);
+  color: var(--ui-glow-text);
+  background: var(--ui-glow-active-bg);
+  box-shadow: var(--ui-glow-shadow-soft);
 }
 
 .settings-nav-icon {
@@ -7295,11 +7302,11 @@ pre,
 }
 
 .settings-quick-tabs button.active {
-  border-color: rgba(var(--settings-accent-rgb), 0.6);
-  background: linear-gradient(135deg, rgba(var(--settings-accent-rgb), 0.3), rgba(var(--settings-accent-rgb), 0.14));
+  border-color: var(--ui-glow-active-border);
+  background: linear-gradient(135deg, var(--ui-glow-active-bg), rgba(var(--ui-glow-rgb), 0.08));
   box-shadow:
-    0 0 0 1px rgba(var(--settings-accent-rgb), 0.22),
-    0 8px 18px rgba(var(--settings-accent-rgb), 0.22),
+    var(--ui-glow-ring),
+    var(--ui-glow-shadow-soft),
     inset 0 1px 0 rgba(255, 255, 255, 0.16);
 }
 
@@ -9963,6 +9970,43 @@ body {
   color: var(--muted);
   font-size: 12px;
   margin-top: 2px;
+}
+
+/* Global glow sync for active tabs, pills and section switches */
+.icon-rail button.active,
+.chat-filter.active,
+.chat-explorer-tabs button.active,
+.media-panel-tabs button.active,
+.feed-segmented button.active,
+.feed-toggle-pill.active,
+.feed-filter-pill.active,
+.feed-tag.active,
+.profile-post-filters button.active,
+.profile-color-preset-row button.active,
+.showcase-badge-grid button.active,
+.appearance-theme-mode button.active,
+.appearance-preset-row button.active,
+.admin-role-picker button.active,
+.admin-verify-filters button.active,
+.privacy-quick-flag-row button.active:not(.danger) {
+  border-color: var(--ui-glow-active-border);
+  background-color: var(--ui-glow-active-bg);
+  box-shadow: var(--ui-glow-ring), var(--ui-glow-shadow-soft);
+}
+
+.chat-item.active,
+.feed-author-item.active,
+.dashboard-functional-mini.active,
+.forward-item.active,
+.appearance-scene-card.active,
+.appearance-custom-preset.active,
+.profile-visual-scene-card.active {
+  border-color: var(--ui-glow-active-border);
+  box-shadow: var(--ui-glow-ring), var(--ui-glow-shadow-soft);
+}
+
+.icon-rail button.active {
+  box-shadow: var(--ui-glow-ring), var(--ui-glow-shadow-strong);
 }
 
 @media (max-width: 720px) {

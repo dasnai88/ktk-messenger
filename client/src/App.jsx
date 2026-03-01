@@ -885,6 +885,7 @@ const DEFAULT_UI_PREFERENCES = {
   syncAccent: true,
   outlineMode: 'auto',
   customPalette: false,
+  glowEnabled: true,
   bgColor: '#0f0c0d',
   panelColor: '#171113',
   panel2Color: '#1d1517',
@@ -1086,6 +1087,7 @@ function normalizeUiPreferences(value) {
   const syncAccent = source.syncAccent !== false
   const outlineMode = source.outlineMode === 'custom' ? 'custom' : 'auto'
   const customPalette = source.customPalette === true
+  const glowEnabled = source.glowEnabled !== false
   const bgColor = normalizeHexColor(source.bgColor, DEFAULT_UI_PREFERENCES.bgColor)
   const panelColor = normalizeHexColor(source.panelColor, DEFAULT_UI_PREFERENCES.panelColor)
   const panel2Color = normalizeHexColor(source.panel2Color, DEFAULT_UI_PREFERENCES.panel2Color)
@@ -1107,6 +1109,7 @@ function normalizeUiPreferences(value) {
     syncAccent,
     outlineMode,
     customPalette,
+    glowEnabled,
     bgColor,
     panelColor,
     panel2Color,
@@ -1211,6 +1214,7 @@ function areUiPreferencesEqual(left, right) {
     a.syncAccent === b.syncAccent &&
     a.outlineMode === b.outlineMode &&
     a.customPalette === b.customPalette &&
+    a.glowEnabled === b.glowEnabled &&
     a.bgColor === b.bgColor &&
     a.panelColor === b.panelColor &&
     a.panel2Color === b.panel2Color &&
@@ -3657,6 +3661,10 @@ export default function App() {
     const chatOutlineRgb = hexToRgb(chatOutlineSource)
     const feedOutlineSource = normalizeHexColor(normalized.feedAccentColor, DEFAULT_UI_PREFERENCES.feedAccentColor)
     const feedOutlineRgb = hexToRgb(feedOutlineSource)
+    const glowSource = normalized.outlineMode === 'custom'
+      ? outlineSource
+      : accentSource
+    const glowRgb = hexToRgb(glowSource)
 
     root.style.setProperty('--accent', accentSource)
     root.style.setProperty('--accent-2', accent2Source)
@@ -3668,6 +3676,24 @@ export default function App() {
     root.style.setProperty('--stripe-rgb', rgbToCssTriplet(stripeRgb))
     root.style.setProperty('--chat-surface-accent-rgb', rgbToCssTriplet(chatOutlineRgb))
     root.style.setProperty('--feed-surface-accent-rgb', rgbToCssTriplet(feedOutlineRgb))
+    root.style.setProperty('--ui-glow-rgb', rgbToCssTriplet(glowRgb))
+    if (normalized.glowEnabled) {
+      root.dataset.uiGlow = 'on'
+      root.style.setProperty('--ui-glow-active-border', `rgba(${glowRgb.r}, ${glowRgb.g}, ${glowRgb.b}, 0.62)`)
+      root.style.setProperty('--ui-glow-active-bg', `rgba(${glowRgb.r}, ${glowRgb.g}, ${glowRgb.b}, 0.18)`)
+      root.style.setProperty('--ui-glow-ring', `0 0 0 1px rgba(${glowRgb.r}, ${glowRgb.g}, ${glowRgb.b}, 0.24)`)
+      root.style.setProperty('--ui-glow-shadow-soft', `0 8px 18px rgba(${glowRgb.r}, ${glowRgb.g}, ${glowRgb.b}, 0.24)`)
+      root.style.setProperty('--ui-glow-shadow-strong', `0 12px 24px rgba(${glowRgb.r}, ${glowRgb.g}, ${glowRgb.b}, 0.3)`)
+      root.style.setProperty('--ui-glow-text', `rgb(${glowRgb.r}, ${glowRgb.g}, ${glowRgb.b})`)
+    } else {
+      root.dataset.uiGlow = 'off'
+      root.style.setProperty('--ui-glow-active-border', 'var(--line)')
+      root.style.setProperty('--ui-glow-active-bg', 'rgba(255, 255, 255, 0.06)')
+      root.style.setProperty('--ui-glow-ring', 'none')
+      root.style.setProperty('--ui-glow-shadow-soft', 'none')
+      root.style.setProperty('--ui-glow-shadow-strong', 'none')
+      root.style.setProperty('--ui-glow-text', 'var(--text)')
+    }
 
     if (normalized.customPalette) {
       root.style.setProperty('--bg', normalizeHexColor(normalized.bgColor, DEFAULT_UI_PREFERENCES.bgColor))
@@ -13431,6 +13457,15 @@ export default function App() {
                         Custom surface palette (bg/panel/card/text)
                       </label>
 
+                      <label className="ui-studio-toggle">
+                        <input
+                          type="checkbox"
+                          checked={uiPreferences.glowEnabled}
+                          onChange={(event) => updateUiPreference('glowEnabled', event.target.checked)}
+                        />
+                        Glow for active tabs/buttons
+                      </label>
+
                       <div className="ui-studio-actions">
                         <button type="button" className="ghost" onClick={enableFullUiCustomization}>
                           Enable full customization
@@ -13624,6 +13659,8 @@ export default function App() {
                         Stripe/chat/feed pickers apply globally to line highlights and surface frames.
                         {' '}
                         Surface palette colors apply app-wide when custom palette is enabled.
+                        {' '}
+                        Glow color follows outline color (or accent in auto mode) and can be disabled.
                       </p>
 
                       <section className="appearance-live-map">
