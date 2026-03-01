@@ -9128,10 +9128,10 @@ export default function App() {
                 </div>
               </div>
 
+              {isFeedToolboxOpen && (
               <div
                 id="feed-toolbox-panel"
-                className={`feed-toolbox-panel ${isFeedToolboxOpen ? 'open' : ''}`.trim()}
-                hidden={!isFeedToolboxOpen}
+                className="feed-toolbox-panel open"
               >
               <div className="feed-segment-group" role="toolbar" aria-label="Сортировка ленты">
                 <span>Сортировка</span>
@@ -9282,10 +9282,10 @@ export default function App() {
                 <small>{isFeedInsightsOpen ? 'Скрыть блок' : 'Показать блок'}</small>
               </button>
 
+              {isFeedInsightsOpen && (
               <div
                 id="feed-insights-panel"
-                className={`feed-insights-panel ${isFeedInsightsOpen ? 'open' : ''}`.trim()}
-                hidden={!isFeedInsightsOpen}
+                className="feed-insights-panel open"
               >
                 <div className="feed-digest-grid">
                   <article className="feed-digest-card">
@@ -9400,7 +9400,9 @@ export default function App() {
                   </div>
                 </div>
               </div>
+              )}
               </div>
+              )}
             </section>
 
             <div className={`feed-list ${feedExplorer.layout === FEED_LAYOUTS.compact ? 'feed-list-compact' : ''}`.trim()}>
