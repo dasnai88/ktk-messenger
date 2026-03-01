@@ -2008,12 +2008,26 @@ body {
   color: var(--text);
 }
 
-.admin-actions select {
-  background: var(--panel-2);
+.admin-role-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.admin-role-picker button {
   border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 6px 8px;
-  color: var(--text);
+  background: var(--panel-2);
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 4px 9px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.admin-role-picker button.active {
+  border-color: rgba(var(--accent-rgb), 0.48);
+  background: rgba(var(--accent-rgb), 0.14);
+  color: var(--accent-soft);
 }
 
 .admin-actions button {

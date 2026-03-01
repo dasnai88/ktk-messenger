@@ -2147,6 +2147,14 @@ export default function App() {
   const profileDeveloperSnapshot = useMemo(() => (
     buildDeveloperSnapshot(profileShowcase, profileView && profileView.role, profilePosts.length)
   ), [profileShowcase, profileView ? profileView.role : '', profilePosts.length])
+  const profileViewRoleLabels = useMemo(() => {
+    if (!profileView) return []
+    const rawRoles = Array.isArray(profileView.roles) && profileView.roles.length > 0
+      ? profileView.roles
+      : (profileView.role ? [profileView.role] : [])
+    const unique = Array.from(new Set(rawRoles.map((item) => String(item || '').trim()).filter(Boolean)))
+    return unique.map((value) => roleLabelByValue.get(value) || value)
+  }, [profileView, roleLabelByValue])
   const editorDeveloperSnapshot = useMemo(() => {
     const draftShowcase = mapFormToShowcase(profileShowcaseForm)
     return buildDeveloperSnapshot(draftShowcase, profileForm.role, myPostsCount)
@@ -5434,6 +5442,16 @@ export default function App() {
     return data.roles || []
   }
 
+  const getUserRoleList = (targetUser) => {
+    if (!targetUser || typeof targetUser !== 'object') return []
+    const byArray = Array.isArray(targetUser.roles)
+      ? targetUser.roles.map((item) => String(item || '').trim()).filter(Boolean)
+      : []
+    if (byArray.length > 0) return Array.from(new Set(byArray))
+    const single = String(targetUser.role || '').trim()
+    return single ? [single] : []
+  }
+
   const loadAdminUsers = async (query) => {
     try {
       const data = await adminListUsers(query || '')
@@ -5442,7 +5460,7 @@ export default function App() {
       setAdminRoleByUser((prev) => {
         const next = { ...prev }
         users.forEach((item) => {
-          next[item.id] = item.role || ''
+          next[item.id] = getUserRoleList(item)
         })
         return next
       })
@@ -5469,21 +5487,35 @@ export default function App() {
   }
 
   const handleAdminSetRoleForUser = async (targetUser) => {
-    const nextRole = String(adminRoleByUser[targetUser.id] || targetUser.role || '').trim()
-    if (!nextRole) {
-      setStatus({ type: 'error', message: 'Выбери роль для пользователя.' })
+    const selectedRoles = Array.isArray(adminRoleByUser[targetUser.id])
+      ? adminRoleByUser[targetUser.id].map((item) => String(item || '').trim()).filter(Boolean)
+      : getUserRoleList(targetUser)
+    if (selectedRoles.length === 0) {
+      setStatus({ type: 'error', message: 'Выбери хотя бы одну роль для пользователя.' })
       return
     }
     try {
-      await adminSetUserRole(targetUser.id, nextRole)
+      await adminSetUserRole(targetUser.id, selectedRoles)
       await loadAdminUsers(adminQuery)
       if (user && targetUser.id === user.id) {
-        setUser((prev) => (prev ? { ...prev, role: nextRole } : prev))
+        setUser((prev) => (prev ? { ...prev, role: selectedRoles[0], roles: selectedRoles } : prev))
       }
-      setStatus({ type: 'success', message: `Роль @${targetUser.username} обновлена.` })
+      setStatus({ type: 'success', message: `Роли @${targetUser.username} обновлены.` })
     } catch (err) {
       setStatus({ type: 'error', message: err.message })
     }
+  }
+
+  const toggleAdminRoleChoice = (userId, roleValue) => {
+    if (!userId || !roleValue) return
+    setAdminRoleByUser((prev) => {
+      const current = Array.isArray(prev[userId]) ? prev[userId] : []
+      const hasRole = current.includes(roleValue)
+      const nextRoles = hasRole
+        ? current.filter((item) => item !== roleValue)
+        : [...current, roleValue]
+      return { ...prev, [userId]: nextRoles }
+    })
   }
 
   const handleLogout = async () => {
@@ -10288,7 +10320,7 @@ export default function App() {
                       Основной трек: <b>{profileDeveloperSnapshot.primaryTrack}</b> • уровень: {profileDeveloperSnapshot.level}
                     </p>
                     <p>
-                      Роль: <b>{profileView && profileView.role ? (roleLabelByValue.get(profileView.role) || profileView.role) : 'Не указана'}</b>
+                      Роли: <b>{profileViewRoleLabels.length > 0 ? profileViewRoleLabels.join(', ') : 'Не указаны'}</b>
                     </p>
                     {profileDeveloperSnapshot.activeTracks.length > 0 ? (
                       <div className="profile-dev-track-chips">
@@ -10588,32 +10620,39 @@ export default function App() {
                     <div className="admin-badges">
                       {u.is_admin && <span className="badge admin">ADMIN</span>}
                       {u.is_moderator && <span className="badge moder">MODER</span>}
-                      {u.role && (
-                        <span className="badge role">
-                          {roleLabelByValue.get(u.role) || u.role}
+                      {getUserRoleList(u).map((roleValue) => (
+                        <span key={`${u.id}-role-badge-${roleValue}`} className="badge role">
+                          {roleLabelByValue.get(roleValue) || roleValue}
                         </span>
-                      )}
+                      ))}
                     </div>
                   </div>
                   <div className="admin-meta">
                     <span>Предупр.: {u.warnings_count}</span>
-                    <span>Роль: {roleLabelByValue.get(u.role) || u.role || 'не задана'}</span>
+                    <span>
+                      Роли: {getUserRoleList(u).map((roleValue) => (roleLabelByValue.get(roleValue) || roleValue)).join(', ') || 'не заданы'}
+                    </span>
                     <span>{u.is_banned ? 'БАН' : 'активен'}</span>
                   </div>
                   <div className="admin-actions">
-                    <select
-                      value={adminRoleByUser[u.id] || u.role || ''}
-                      onChange={(event) =>
-                        setAdminRoleByUser((prev) => ({ ...prev, [u.id]: event.target.value }))
-                      }
-                    >
-                      <option value="" disabled>Выбери роль</option>
-                      {roleOptions.map((role) => (
-                        <option key={role.value} value={role.value}>{role.label}</option>
-                      ))}
-                    </select>
+                    <div className="admin-role-picker">
+                      {roleOptions.map((role) => {
+                        const activeRoles = Array.isArray(adminRoleByUser[u.id]) ? adminRoleByUser[u.id] : getUserRoleList(u)
+                        const isActive = activeRoles.includes(role.value)
+                        return (
+                          <button
+                            key={`${u.id}-role-picker-${role.value}`}
+                            type="button"
+                            className={isActive ? 'active' : ''}
+                            onClick={() => toggleAdminRoleChoice(u.id, role.value)}
+                          >
+                            {role.label}
+                          </button>
+                        )
+                      })}
+                    </div>
                     <button type="button" onClick={() => handleAdminSetRoleForUser(u)}>
-                      Сменить роль
+                      Сохранить роли
                     </button>
                     {u.is_banned ? (
                       <button type="button" onClick={() => adminUnbanUser(u.id).then(() => loadAdminUsers(adminQuery))}>

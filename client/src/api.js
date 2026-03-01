@@ -482,7 +482,10 @@ export async function adminCreateRole(value, label) {
   return request('/admin/roles', { method: 'POST', body: { value, label } })
 }
 
-export async function adminSetUserRole(userId, role) {
-  return request('/admin/set-role', { method: 'POST', body: { userId, role } })
+export async function adminSetUserRole(userId, roleOrRoles) {
+  if (Array.isArray(roleOrRoles)) {
+    return request('/admin/set-role', { method: 'POST', body: { userId, roles: roleOrRoles } })
+  }
+  return request('/admin/set-role', { method: 'POST', body: { userId, role: roleOrRoles } })
 }
 

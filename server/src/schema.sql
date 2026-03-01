@@ -55,6 +55,13 @@ create table if not exists users (
   created_at timestamptz default now()
 );
 
+create table if not exists user_roles (
+  user_id uuid not null references users(id) on delete cascade,
+  role_value text not null references roles(value) on update cascade,
+  created_at timestamptz default now(),
+  primary key (user_id, role_value)
+);
+
 create table if not exists user_subscriptions (
   subscriber_id uuid references users(id) on delete cascade,
   target_user_id uuid references users(id) on delete cascade,
@@ -608,6 +615,25 @@ BEGIN
     ON UPDATE CASCADE;
 EXCEPTION WHEN undefined_table THEN NULL;
 WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  CREATE TABLE IF NOT EXISTS user_roles (
+    user_id uuid not null references users(id) on delete cascade,
+    role_value text not null references roles(value) on update cascade,
+    created_at timestamptz default now(),
+    primary key (user_id, role_value)
+  );
+EXCEPTION WHEN undefined_table THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  INSERT INTO user_roles (user_id, role_value)
+  SELECT id, role
+  FROM users
+  WHERE role IS NOT NULL
+  ON CONFLICT (user_id, role_value) DO NOTHING;
+EXCEPTION WHEN undefined_table THEN NULL;
 END $$;
 
 DO $$ BEGIN

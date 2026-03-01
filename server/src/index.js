@@ -480,6 +480,78 @@ async function hasAllowedRole(roleValue) {
   return defaultRoles.some((item) => item.value === roleValue)
 }
 
+function normalizeRoleValues(value) {
+  const source = Array.isArray(value) ? value : [value]
+  const unique = new Set()
+  source.forEach((item) => {
+    const normalized = normalizeRoleValue(item)
+    if (!normalized) return
+    unique.add(normalized)
+  })
+  return Array.from(unique)
+}
+
+async function getAllowedRoleValues(roleValues) {
+  const normalized = normalizeRoleValues(roleValues)
+  if (normalized.length === 0) return []
+  try {
+    const result = await pool.query(
+      `select value
+       from roles
+       where value = any($1::text[])`,
+      [normalized]
+    )
+    const allowed = new Set(result.rows.map((row) => row.value))
+    return normalized.filter((item) => allowed.has(item))
+  } catch (err) {
+    if (!(err && err.code === '42P01')) {
+      throw err
+    }
+  }
+  const fallback = new Set(defaultRoles.map((item) => item.value))
+  return normalized.filter((item) => fallback.has(item))
+}
+
+function normalizeUserRolesFromRow(row) {
+  if (!row || typeof row !== 'object') return []
+  const byArray = Array.isArray(row.roles)
+    ? row.roles.map((item) => normalizeRoleValue(item)).filter(Boolean)
+    : []
+  if (byArray.length > 0) return Array.from(new Set(byArray))
+  const single = normalizeRoleValue(row.role)
+  return single ? [single] : []
+}
+
+async function saveUserRoles(userId, roleValues, dbClient = null) {
+  const normalized = normalizeRoleValues(roleValues)
+  if (normalized.length === 0) {
+    throw new Error('At least one role is required')
+  }
+  const allowed = await getAllowedRoleValues(normalized)
+  if (allowed.length !== normalized.length) {
+    throw new Error('Invalid role')
+  }
+
+  const primaryRole = allowed[0]
+  const db = dbClient || pool
+  await db.query('update users set role = $2 where id = $1', [userId, primaryRole])
+  try {
+    await db.query('delete from user_roles where user_id = $1', [userId])
+    await db.query(
+      `insert into user_roles (user_id, role_value)
+       select $1, role_value
+       from unnest($2::text[]) as role_value
+       on conflict (user_id, role_value) do nothing`,
+      [userId, allowed]
+    )
+  } catch (err) {
+    if (!(err && err.code === '42P01')) {
+      throw err
+    }
+  }
+  return allowed
+}
+
 app.param('id', (req, res, next, id) => {
   if (!isValidUuid(id)) {
     return res.status(400).json({ error: 'Invalid id' })
@@ -488,11 +560,14 @@ app.param('id', (req, res, next, id) => {
 })
 
 function mapUser(row) {
+  const roles = normalizeUserRolesFromRow(row)
+  const primaryRole = row.role || roles[0] || ''
   return {
     id: row.id,
     login: row.login,
     username: row.username,
-    role: row.role,
+    role: primaryRole,
+    roles,
     displayName: row.display_name,
     bio: row.bio,
     statusText: row.status_text || '',
@@ -634,7 +709,7 @@ function isProfileFeaturesSchemaError(err) {
   if (!err || typeof err !== 'object') return false
   if (err.code !== '42P01' && err.code !== '42703') return false
   const message = typeof err.message === 'string' ? err.message.toLowerCase() : ''
-  return message.includes('user_subscriptions') || message.includes('profile_tracks')
+  return message.includes('user_subscriptions') || message.includes('profile_tracks') || message.includes('user_roles')
 }
 
 function isProfileShowcaseSchemaError(err) {
@@ -669,6 +744,12 @@ async function getUserByIdWithStats(userId, viewerId) {
   try {
     const result = await pool.query(
       `select u.*,
+              coalesce(
+                (select array_agg(ur.role_value order by ur.role_value asc)
+                 from user_roles ur
+                 where ur.user_id = u.id),
+                array[u.role]
+              ) as roles,
               (select count(*) from user_subscriptions s where s.target_user_id = u.id) as subscribers_count,
               (select count(*) from user_subscriptions s where s.subscriber_id = u.id) as subscriptions_count,
               (select count(*) from profile_tracks t where t.user_id = u.id) as tracks_count,
@@ -704,6 +785,12 @@ async function getUserByUsernameWithStats(username, viewerId) {
   try {
     const result = await pool.query(
       `select u.*,
+              coalesce(
+                (select array_agg(ur.role_value order by ur.role_value asc)
+                 from user_roles ur
+                 where ur.user_id = u.id),
+                array[u.role]
+              ) as roles,
               (select count(*) from user_subscriptions s where s.target_user_id = u.id) as subscribers_count,
               (select count(*) from user_subscriptions s where s.subscriber_id = u.id) as subscriptions_count,
               (select count(*) from profile_tracks t where t.user_id = u.id) as tracks_count,
@@ -1612,7 +1699,11 @@ app.post('/api/auth/register', async (req, res) => {
     const login = normalizeLogin(req.body.login)
     const username = normalizeUsername(req.body.username)
     const password = req.body.password
-    const role = normalizeRoleValue(req.body.role)
+    const requestedRoles = normalizeRoleValues(
+      Array.isArray(req.body.roles) && req.body.roles.length > 0
+        ? req.body.roles
+        : req.body.role
+    )
 
     if (login.length < 3) {
       return res.status(400).json({ error: 'Login must be at least 3 characters' })
@@ -1623,16 +1714,32 @@ app.post('/api/auth/register', async (req, res) => {
     if (!isValidPassword(password)) {
       return res.status(400).json({ error: 'Password must be at least 6 characters' })
     }
-    if (!(await hasAllowedRole(role))) {
+    if (requestedRoles.length === 0) {
+      return res.status(400).json({ error: 'At least one role is required' })
+    }
+    const allowedRoles = await getAllowedRoleValues(requestedRoles)
+    if (allowedRoles.length !== requestedRoles.length) {
       return res.status(400).json({ error: 'Invalid role' })
     }
 
     const passwordHash = await bcrypt.hash(password, 10)
 
-    const result = await pool.query(
-      'insert into users (login, username, password_hash, role) values ($1, $2, $3, $4) returning *',
-      [login, username, passwordHash, role]
-    )
+    const client = await pool.connect()
+    let result
+    try {
+      await client.query('begin')
+      result = await client.query(
+        'insert into users (login, username, password_hash, role) values ($1, $2, $3, $4) returning *',
+        [login, username, passwordHash, allowedRoles[0]]
+      )
+      await saveUserRoles(result.rows[0].id, allowedRoles, client)
+      await client.query('commit')
+    } catch (err) {
+      await client.query('rollback')
+      throw err
+    } finally {
+      client.release()
+    }
 
     const user = await getUserByIdWithStats(result.rows[0].id, result.rows[0].id) || mapUser(result.rows[0])
     const token = signToken(user.id)
@@ -1762,6 +1869,9 @@ app.patch('/api/me', auth, ensureNotBanned, async (req, res) => {
     }
 
     if (result.rowCount === 0) return res.status(404).json({ error: 'User not found' })
+    if (role) {
+      await saveUserRoles(req.userId, [role])
+    }
 
     const user = await getUserByIdWithStats(req.userId, req.userId)
     res.json({ user })
@@ -4313,15 +4423,51 @@ app.delete('/api/posts/:id', auth, ensureNotBanned, async (req, res) => {
 app.get('/api/admin/users', auth, adminOnly, async (req, res) => {
   try {
     const q = String(req.query.q || '').trim().toLowerCase()
-    const result = await pool.query(
-      `select id, username, display_name, role, is_banned, warnings_count, is_admin, is_moderator
-       from users
-       where ($1 = '' or username ilike $2)
-       order by username
-       limit 50`,
-      [q, `${q}%`]
-    )
-    res.json({ users: result.rows })
+    try {
+      const result = await pool.query(
+        `select u.id,
+                u.username,
+                u.display_name,
+                u.role,
+                coalesce(
+                  (select array_agg(ur.role_value order by ur.role_value asc)
+                   from user_roles ur
+                   where ur.user_id = u.id),
+                  array[u.role]
+                ) as roles,
+                u.is_banned,
+                u.warnings_count,
+                u.is_admin,
+                u.is_moderator
+         from users u
+         where ($1 = '' or u.username ilike $2)
+         order by u.username
+         limit 50`,
+        [q, `${q}%`]
+      )
+      return res.json({ users: result.rows })
+    } catch (err) {
+      if (!(err && err.code === '42P01')) {
+        throw err
+      }
+      const fallback = await pool.query(
+        `select u.id,
+                u.username,
+                u.display_name,
+                u.role,
+                array[u.role] as roles,
+                u.is_banned,
+                u.warnings_count,
+                u.is_admin,
+                u.is_moderator
+         from users u
+         where ($1 = '' or u.username ilike $2)
+         order by u.username
+         limit 50`,
+        [q, `${q}%`]
+      )
+      return res.json({ users: fallback.rows })
+    }
   } catch (err) {
     console.error('Admin users error', err)
     res.status(500).json({ error: 'Unexpected error' })
@@ -4363,27 +4509,44 @@ app.post('/api/admin/roles', auth, adminOnly, async (req, res) => {
 app.post('/api/admin/set-role', auth, adminOnly, async (req, res) => {
   try {
     const userId = req.body.userId
-    const role = normalizeRoleValue(req.body.role)
+    const requestedRoles = normalizeRoleValues(
+      Array.isArray(req.body.roles) && req.body.roles.length > 0
+        ? req.body.roles
+        : req.body.role
+    )
     if (!isValidUuid(userId)) {
       return res.status(400).json({ error: 'Invalid user id' })
     }
-    if (!(await hasAllowedRole(role))) {
+    if (requestedRoles.length === 0) {
+      return res.status(400).json({ error: 'At least one role is required' })
+    }
+    const allowedRoles = await getAllowedRoleValues(requestedRoles)
+    if (allowedRoles.length !== requestedRoles.length) {
       return res.status(400).json({ error: 'Invalid role' })
     }
 
-    const result = await pool.query(
-      `update users
-       set role = $2
+    const existing = await pool.query(
+      `select id, username
+       from users
        where id = $1
-       returning id, username, role`,
-      [userId, role]
+       limit 1`,
+      [userId]
     )
 
-    if (result.rowCount === 0) {
+    if (existing.rowCount === 0) {
       return res.status(404).json({ error: 'User not found' })
     }
 
-    res.json({ ok: true, user: result.rows[0] })
+    const savedRoles = await saveUserRoles(userId, allowedRoles)
+    res.json({
+      ok: true,
+      user: {
+        id: existing.rows[0].id,
+        username: existing.rows[0].username,
+        role: savedRoles[0],
+        roles: savedRoles
+      }
+    })
   } catch (err) {
     console.error('Admin set role error', err)
     res.status(500).json({ error: 'Unexpected error' })
