@@ -652,6 +652,8 @@ const INITIAL_MINI_PROFILE_CARD_STATE = {
 }
 const MINI_PROFILE_CARD_ESTIMATED_WIDTH = 320
 const MINI_PROFILE_CARD_ESTIMATED_HEIGHT = 220
+const PROFILE_ACHIEVEMENTS_UNLOCKED_PREVIEW_LIMIT = 4
+const PROFILE_ACHIEVEMENTS_LOCKED_PREVIEW_LIMIT = 2
 const QUICK_MESSAGE_REACTIONS = ['❤️', '👍', '😭', '👎', '🤩', '🐳', '❤️‍🔥']
 const ALL_MESSAGE_REACTIONS = Array.from(new Set([
   ...QUICK_MESSAGE_REACTIONS,
@@ -2132,6 +2134,12 @@ export default function App() {
   }, [profileView, profilePosts.length, profileTracks.length, profileShowcase])
   const unlockedProfileAchievements = profileAchievements.unlocked || []
   const lockedProfileAchievements = profileAchievements.locked || []
+  const visibleUnlockedProfileAchievements = unlockedProfileAchievements.slice(0, PROFILE_ACHIEVEMENTS_UNLOCKED_PREVIEW_LIMIT)
+  const visibleLockedProfileAchievements = lockedProfileAchievements.slice(0, PROFILE_ACHIEVEMENTS_LOCKED_PREVIEW_LIMIT)
+  const hiddenProfileAchievementsCount = Math.max(
+    0,
+    unlockedProfileAchievements.length - visibleUnlockedProfileAchievements.length
+  ) + Math.max(0, lockedProfileAchievements.length - visibleLockedProfileAchievements.length)
   const profileAchievementsTotal = Number(profileAchievements.total || 0)
   const profileAchievementsProgress = profileAchievementsTotal > 0
     ? Math.round((unlockedProfileAchievements.length / profileAchievementsTotal) * 100)
@@ -10234,7 +10242,7 @@ export default function App() {
                     <div className="profile-achievements-head">
                       <div className="profile-achievements-summary">
                         <h3>Достижения</h3>
-                        <p>Первое выдается сразу за регистрацию. Остальные открываются за реальные заслуги.</p>
+                        <p>Реальный прогресс аккаунта.</p>
                       </div>
                       <span>{unlockedProfileAchievements.length}/{profileAchievementsTotal}</span>
                     </div>
@@ -10248,7 +10256,7 @@ export default function App() {
                       <span style={{ width: `${profileAchievementsProgress}%` }}></span>
                     </div>
                     <div className="profile-achievements-list">
-                      {unlockedProfileAchievements.map((item) => (
+                      {visibleUnlockedProfileAchievements.map((item) => (
                         <article key={item.id} className={`profile-achievement-item unlocked tier-${item.tier}`.trim()}>
                           <div className="profile-achievement-badge">{item.emoji}</div>
                           <div className="profile-achievement-meta">
@@ -10257,7 +10265,7 @@ export default function App() {
                           </div>
                         </article>
                       ))}
-                      {lockedProfileAchievements.slice(0, 3).map((item) => (
+                      {visibleLockedProfileAchievements.map((item) => (
                         <article key={item.id} className={`profile-achievement-item locked tier-${item.tier}`.trim()}>
                           <div className="profile-achievement-badge">{item.emoji}</div>
                           <div className="profile-achievement-meta">
@@ -10267,6 +10275,9 @@ export default function App() {
                         </article>
                       ))}
                     </div>
+                    {hiddenProfileAchievementsCount > 0 && (
+                      <div className="profile-achievements-more">+{hiddenProfileAchievementsCount} еще</div>
+                    )}
                   </article>
                   <article className="profile-dev-card">
                     <div className="profile-dev-card-head">
