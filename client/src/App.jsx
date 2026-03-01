@@ -2147,14 +2147,22 @@ export default function App() {
   const profileDeveloperSnapshot = useMemo(() => (
     buildDeveloperSnapshot(profileShowcase, profileView && profileView.role, profilePosts.length)
   ), [profileShowcase, profileView ? profileView.role : '', profilePosts.length])
-  const profileViewRoleLabels = useMemo(() => {
-    if (!profileView) return []
-    const rawRoles = Array.isArray(profileView.roles) && profileView.roles.length > 0
-      ? profileView.roles
-      : (profileView.role ? [profileView.role] : [])
-    const unique = Array.from(new Set(rawRoles.map((item) => String(item || '').trim()).filter(Boolean)))
-    return unique.map((value) => roleLabelByValue.get(value) || value)
-  }, [profileView, roleLabelByValue])
+  const profileDevSummary = useMemo(() => {
+    if (!profileDeveloperSnapshot) return 'Снимок не готов'
+    return `${profileDeveloperSnapshot.score}% • ${profileDeveloperSnapshot.primaryTrack} • ${profileDeveloperSnapshot.level}`
+  }, [profileDeveloperSnapshot])
+  const profileShowcaseSummary = useMemo(() => {
+    if (profileShowcase && String(profileShowcase.headline || '').trim()) {
+      return String(profileShowcase.headline).trim()
+    }
+    const skillCount = Array.isArray(profileShowcase && profileShowcase.skills) ? profileShowcase.skills.length : 0
+    const badgeCount = Array.isArray(profileShowcase && profileShowcase.badges) ? profileShowcase.badges.length : 0
+    const linkCount = Array.isArray(profileShowcase && profileShowcase.links) ? profileShowcase.links.length : 0
+    if (skillCount || badgeCount || linkCount) {
+      return `${skillCount} skills • ${badgeCount} badges • ${linkCount} links`
+    }
+    return 'Showcase не заполнен'
+  }, [profileShowcase])
   const editorDeveloperSnapshot = useMemo(() => {
     const draftShowcase = mapFormToShowcase(profileShowcaseForm)
     return buildDeveloperSnapshot(draftShowcase, profileForm.role, myPostsCount)
@@ -7535,16 +7543,6 @@ export default function App() {
     ? `profile-theme-${profileShowcase.heroTheme}`
     : 'profile-theme-default'
   const profileHeroHasBanner = Boolean(profileView && profileView.bannerUrl)
-  const profileShowcaseHasContent = Boolean(
-    profileShowcase.headline ||
-    profileShowcase.skills.length ||
-    profileShowcase.badges.length ||
-    profileShowcase.links.length
-  )
-  const profileShowcaseBadgeMap = new Map(PROFILE_BADGE_OPTIONS.map((item) => [item.id, item]))
-  const profileShowcaseBadges = profileShowcase.badges
-    .map((badgeId) => profileShowcaseBadgeMap.get(badgeId))
-    .filter(Boolean)
 
   return (
     <div className="page">
@@ -10191,31 +10189,6 @@ export default function App() {
                     {profileViewMoodLabel && <div className="profile-mood-chip profile-mood-profile">{profileViewMoodLabel}</div>}
                     {profileShowcase.headline && <p className="profile-headline">{profileShowcase.headline}</p>}
                     {profileView.bio && <p>{profileView.bio}</p>}
-                    {profileShowcaseBadges.length > 0 && (
-                      <div className="profile-showcase-badges">
-                        {profileShowcaseBadges.map((badge) => (
-                          <span key={badge.id}>
-                            {badge.emoji} {badge.label}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                    {profileShowcase.skills.length > 0 && (
-                      <div className="profile-showcase-skills">
-                        {profileShowcase.skills.map((skill) => (
-                          <span key={`${profileView.id}-skill-${skill}`}>#{skill}</span>
-                        ))}
-                      </div>
-                    )}
-                    {profileShowcase.links.length > 0 && (
-                      <div className="profile-showcase-links">
-                        {profileShowcase.links.map((link) => (
-                          <a key={`${profileView.id}-link-${link.url}`} href={link.url} target="_blank" rel="noreferrer">
-                            {link.label}
-                          </a>
-                        ))}
-                      </div>
-                    )}
                     <div className="profile-stats">
                       <span><strong>{profileFollowers}</strong> followers</span>
                       <span><strong>{profileFollowing}</strong> following</span>
@@ -10252,24 +10225,33 @@ export default function App() {
                       Copy @username
                     </button>
                   </div>
-                </div>
-                <section className="profile-insights-grid">
-                  <article className="profile-power-card">
-                    <div className="profile-power-head">
-                      <h3>Profile Power</h3>
+                  <div className="profile-power-ribbon">
+                    <div className="profile-power-ribbon-meta">
+                      <span>Profile Power</span>
                       <strong>{profilePowerScore}%</strong>
                     </div>
-                    <div className="profile-power-bar" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={profilePowerScore}>
+                    <div
+                      className="profile-power-ribbon-track"
+                      role="progressbar"
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      aria-valuenow={profilePowerScore}
+                    >
                       <span style={{ width: `${profilePowerScore}%` }}></span>
                     </div>
-                    <p>
-                      {profilePowerScore >= 80
-                        ? 'Профиль выглядит максимально прокачанным.'
-                        : profilePowerScore >= 50
-                          ? 'Сильный профиль. Можно добавить пару штрихов.'
-                          : 'Есть потенциал: заполни оформление и активности.'}
-                    </p>
+                  </div>
+                </div>
+                <section className="profile-mini-summary-row">
+                  <article className="profile-mini-summary">
+                    <span>Dev Snapshot</span>
+                    <strong>{profileDevSummary}</strong>
                   </article>
+                  <article className="profile-mini-summary">
+                    <span>Showcase</span>
+                    <strong>{profileShowcaseSummary}</strong>
+                  </article>
+                </section>
+                <section className="profile-insights-grid">
                   <article className="profile-achievements-card">
                     <div className="profile-achievements-head">
                       <div className="profile-achievements-summary">
@@ -10311,46 +10293,7 @@ export default function App() {
                       <div className="profile-achievements-more">+{hiddenProfileAchievementsCount} еще</div>
                     )}
                   </article>
-                  <article className="profile-dev-card">
-                    <div className="profile-dev-card-head">
-                      <h3>Dev Snapshot</h3>
-                      <strong>{profileDeveloperSnapshot.score}%</strong>
-                    </div>
-                    <p>
-                      Основной трек: <b>{profileDeveloperSnapshot.primaryTrack}</b> • уровень: {profileDeveloperSnapshot.level}
-                    </p>
-                    <p>
-                      Роли: <b>{profileViewRoleLabels.length > 0 ? profileViewRoleLabels.join(', ') : 'Не указаны'}</b>
-                    </p>
-                    {profileDeveloperSnapshot.activeTracks.length > 0 ? (
-                      <div className="profile-dev-track-chips">
-                        {profileDeveloperSnapshot.activeTracks.map((track) => (
-                          <span key={`profile-track-${track.id}`}>{track.label} · {track.score}</span>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="profile-dev-empty">Нет выраженного стека. Добавь skills в Showcase.</div>
-                    )}
-                  </article>
                 </section>
-                {profileShowcaseHasContent && (
-                  <section className="profile-showcase-card">
-                    <div className="profile-showcase-card-head">
-                      <h3>Showcase</h3>
-                      <span>{profileShowcase.heroTheme}</span>
-                    </div>
-                    <p>
-                      {profileShowcase.headline || 'Пользователь настроил персональное оформление профиля.'}
-                    </p>
-                    {profileShowcase.skills.length > 0 && (
-                      <div className="profile-showcase-skills">
-                        {profileShowcase.skills.map((skill) => (
-                          <span key={`${profileView.id}-showcase-${skill}`}>#{skill}</span>
-                        ))}
-                      </div>
-                    )}
-                  </section>
-                )}
                 <section className="music-panel">
                   <div className="music-panel-head">
                     <h3>Music</h3>
