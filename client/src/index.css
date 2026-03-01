@@ -6392,8 +6392,17 @@ body {
   color: #9ef7d2;
 }
 
+.mini-profile-actions .ghost.mini-profile-posts {
+  border-color: rgba(148, 163, 184, 0.35);
+}
+
 .mini-profile-actions .ghost.mini-profile-copy {
   border-style: dashed;
+}
+
+.mini-profile-actions .ghost.mini-profile-wave {
+  border-color: rgba(251, 191, 36, 0.44);
+  color: #fde68a;
 }
 
 .mini-profile-actions .primary {

@@ -6992,6 +6992,23 @@ export default function App() {
     handleStartConversation(target.username)
   }
 
+  const handleMiniProfileOpenPosts = () => {
+    const target = miniProfileCard.user
+    if (!target) return
+    hideMiniProfileCard({ immediate: true })
+    if (target.id && !String(target.id).startsWith('username:')) {
+      openFeedFocus({
+        filter: FEED_FILTERS.all,
+        authorId: target.id
+      })
+      return
+    }
+    if (target.username) {
+      openProfile(target.username)
+      setStatus({ type: 'info', message: 'Открыт профиль автора: используй вкладку постов.' })
+    }
+  }
+
   const handleMiniProfileCopyUsername = async () => {
     const target = miniProfileCard.user
     if (!target || !target.username) return
@@ -7005,6 +7022,26 @@ export default function App() {
       setStatus({ type: 'success', message: 'Username скопирован.' })
     } catch (_err) {
       setStatus({ type: 'error', message: 'Не удалось скопировать username.' })
+    }
+  }
+
+  const handleMiniProfileWave = async () => {
+    const target = miniProfileCard.user
+    if (!target || !target.username || !user) return
+    if (target.username === user.username) return
+    try {
+      const data = await createConversation(target.username)
+      const targetConversationId = data && data.conversation ? data.conversation.id : ''
+      if (targetConversationId) {
+        const waveMessage = PROFILE_WAVE_TEMPLATES[Math.floor(Math.random() * PROFILE_WAVE_TEMPLATES.length)] || PROFILE_WAVE_TEMPLATES[0]
+        await sendMessage(targetConversationId, waveMessage)
+      }
+      const list = await getConversations()
+      setConversations(list.conversations || [])
+      setStatus({ type: 'success', message: 'Вейв отправлен.' })
+      hideMiniProfileCard({ immediate: true })
+    } catch (err) {
+      setStatus({ type: 'error', message: err.message })
     }
   }
 
@@ -12262,6 +12299,7 @@ export default function App() {
             </div>
             <div className="mini-profile-actions">
               <button type="button" className="ghost" onClick={handleMiniProfileOpen}>Профиль</button>
+              <button type="button" className="ghost mini-profile-posts" onClick={handleMiniProfileOpenPosts}>Посты</button>
               {miniProfileCard.user.username && user && miniProfileCard.user.username !== user.username && (
                 <button
                   type="button"
@@ -12269,6 +12307,11 @@ export default function App() {
                   onClick={handleMiniProfileToggleSubscription}
                 >
                   {miniProfileCard.user.isSubscribed ? 'Отписаться' : 'Подписаться'}
+                </button>
+              )}
+              {miniProfileCard.user.username && user && miniProfileCard.user.username !== user.username && (
+                <button type="button" className="ghost mini-profile-wave" onClick={handleMiniProfileWave}>
+                  Вейв
                 </button>
               )}
               {miniProfileCard.user.username && (
