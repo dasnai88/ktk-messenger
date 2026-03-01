@@ -726,8 +726,16 @@ const DEFAULT_UI_PREFERENCES = {
   density: 'comfortable',
   ambient: 58,
   radius: 22,
+  lineStrength: 100,
   syncAccent: true,
   outlineMode: 'auto',
+  customPalette: false,
+  bgColor: '#0f0c0d',
+  panelColor: '#171113',
+  panel2Color: '#1d1517',
+  cardColor: '#201719',
+  textColor: '#f6f2f2',
+  mutedColor: '#c5b8b8',
   outlineColor: '#38bdf8',
   stripeColor: '#38bdf8',
   chatAccentColor: '#38bdf8',
@@ -915,8 +923,16 @@ function normalizeUiPreferences(value) {
     : DEFAULT_UI_PREFERENCES.density
   const ambient = clampNumber(source.ambient, 0, 100)
   const radius = clampNumber(source.radius, 12, 36)
+  const lineStrength = clampNumber(source.lineStrength, 35, 180)
   const syncAccent = source.syncAccent !== false
   const outlineMode = source.outlineMode === 'custom' ? 'custom' : 'auto'
+  const customPalette = source.customPalette === true
+  const bgColor = normalizeHexColor(source.bgColor, DEFAULT_UI_PREFERENCES.bgColor)
+  const panelColor = normalizeHexColor(source.panelColor, DEFAULT_UI_PREFERENCES.panelColor)
+  const panel2Color = normalizeHexColor(source.panel2Color, DEFAULT_UI_PREFERENCES.panel2Color)
+  const cardColor = normalizeHexColor(source.cardColor, DEFAULT_UI_PREFERENCES.cardColor)
+  const textColor = normalizeHexColor(source.textColor, DEFAULT_UI_PREFERENCES.textColor)
+  const mutedColor = normalizeHexColor(source.mutedColor, DEFAULT_UI_PREFERENCES.mutedColor)
   const outlineColor = normalizeHexColor(source.outlineColor, DEFAULT_UI_PREFERENCES.outlineColor)
   const stripeColor = normalizeHexColor(source.stripeColor, DEFAULT_UI_PREFERENCES.stripeColor)
   const chatAccentColor = normalizeHexColor(source.chatAccentColor, DEFAULT_UI_PREFERENCES.chatAccentColor)
@@ -928,8 +944,16 @@ function normalizeUiPreferences(value) {
     density,
     ambient,
     radius,
+    lineStrength,
     syncAccent,
     outlineMode,
+    customPalette,
+    bgColor,
+    panelColor,
+    panel2Color,
+    cardColor,
+    textColor,
+    mutedColor,
     outlineColor,
     stripeColor,
     chatAccentColor,
@@ -3313,6 +3337,7 @@ export default function App() {
     const normalized = normalizeUiPreferences(uiPreferences)
     const radius = Math.round(normalized.radius)
     const ambientOpacity = (0.04 + (normalized.ambient / 100) * 0.2).toFixed(3)
+    const lineStrengthFactor = clampNumber(normalized.lineStrength / 100, 0.35, 1.8)
     root.dataset.uiStyle = normalized.style
     root.dataset.uiDensity = normalized.density
     root.style.setProperty('--ambient-opacity', ambientOpacity)
@@ -3339,9 +3364,10 @@ export default function App() {
     const outlineRgb = hexToRgb(outlineSource)
     const stripeSource = normalizeHexColor(normalized.stripeColor, DEFAULT_UI_PREFERENCES.stripeColor)
     const stripeRgb = hexToRgb(stripeSource)
-    const lineAlpha = normalized.style === 'neo'
+    const baseLineAlpha = normalized.style === 'neo'
       ? (theme === 'light' ? 0.24 : 0.28)
       : (theme === 'light' ? 0.18 : 0.08)
+    const lineAlpha = clampNumber(baseLineAlpha * lineStrengthFactor, 0.04, 0.62)
     const chatOutlineSource = normalizeHexColor(normalized.chatAccentColor, DEFAULT_UI_PREFERENCES.chatAccentColor)
     const chatOutlineRgb = hexToRgb(chatOutlineSource)
     const feedOutlineSource = normalizeHexColor(normalized.feedAccentColor, DEFAULT_UI_PREFERENCES.feedAccentColor)
@@ -3357,6 +3383,22 @@ export default function App() {
     root.style.setProperty('--stripe-rgb', rgbToCssTriplet(stripeRgb))
     root.style.setProperty('--chat-surface-accent-rgb', rgbToCssTriplet(chatOutlineRgb))
     root.style.setProperty('--feed-surface-accent-rgb', rgbToCssTriplet(feedOutlineRgb))
+
+    if (normalized.customPalette) {
+      root.style.setProperty('--bg', normalizeHexColor(normalized.bgColor, DEFAULT_UI_PREFERENCES.bgColor))
+      root.style.setProperty('--panel', normalizeHexColor(normalized.panelColor, DEFAULT_UI_PREFERENCES.panelColor))
+      root.style.setProperty('--panel-2', normalizeHexColor(normalized.panel2Color, DEFAULT_UI_PREFERENCES.panel2Color))
+      root.style.setProperty('--card', normalizeHexColor(normalized.cardColor, DEFAULT_UI_PREFERENCES.cardColor))
+      root.style.setProperty('--text', normalizeHexColor(normalized.textColor, DEFAULT_UI_PREFERENCES.textColor))
+      root.style.setProperty('--muted', normalizeHexColor(normalized.mutedColor, DEFAULT_UI_PREFERENCES.mutedColor))
+    } else {
+      root.style.removeProperty('--bg')
+      root.style.removeProperty('--panel')
+      root.style.removeProperty('--panel-2')
+      root.style.removeProperty('--card')
+      root.style.removeProperty('--text')
+      root.style.removeProperty('--muted')
+    }
 
     try {
       localStorage.setItem(UI_PREFERENCES_STORAGE_KEY, JSON.stringify(normalized))
@@ -8122,6 +8164,16 @@ export default function App() {
       if (key === 'outlineColor') {
         next.outlineMode = 'custom'
       }
+      if (
+        key === 'bgColor' ||
+        key === 'panelColor' ||
+        key === 'panel2Color' ||
+        key === 'cardColor' ||
+        key === 'textColor' ||
+        key === 'mutedColor'
+      ) {
+        next.customPalette = true
+      }
       return normalizeUiPreferences(next)
     })
   }
@@ -8131,6 +8183,7 @@ export default function App() {
       ...prev,
       syncAccent: false,
       outlineMode: 'custom',
+      customPalette: true,
       stripeColor: prev.stripeColor || prev.outlineColor || prev.accent2Color,
       chatAccentColor: prev.chatAccentColor || prev.outlineColor || prev.accentColor,
       feedAccentColor: prev.feedAccentColor || prev.accentColor
@@ -9052,7 +9105,13 @@ export default function App() {
       outline: normalizeHexColor(normalized.outlineColor, DEFAULT_UI_PREFERENCES.outlineColor),
       stripe: normalizeHexColor(normalized.stripeColor, DEFAULT_UI_PREFERENCES.stripeColor),
       chat: normalizeHexColor(normalized.chatAccentColor, DEFAULT_UI_PREFERENCES.chatAccentColor),
-      feed: normalizeHexColor(normalized.feedAccentColor, DEFAULT_UI_PREFERENCES.feedAccentColor)
+      feed: normalizeHexColor(normalized.feedAccentColor, DEFAULT_UI_PREFERENCES.feedAccentColor),
+      bg: normalizeHexColor(normalized.bgColor, DEFAULT_UI_PREFERENCES.bgColor),
+      panel: normalizeHexColor(normalized.panelColor, DEFAULT_UI_PREFERENCES.panelColor),
+      panel2: normalizeHexColor(normalized.panel2Color, DEFAULT_UI_PREFERENCES.panel2Color),
+      card: normalizeHexColor(normalized.cardColor, DEFAULT_UI_PREFERENCES.cardColor),
+      text: normalizeHexColor(normalized.textColor, DEFAULT_UI_PREFERENCES.textColor),
+      muted: normalizeHexColor(normalized.mutedColor, DEFAULT_UI_PREFERENCES.mutedColor)
     }
   }, [uiPreferences])
   const appearanceAccentPreview = useMemo(() => {
@@ -12804,6 +12863,17 @@ export default function App() {
                             onChange={(event) => updateUiPreference('radius', Number(event.target.value))}
                           />
                         </label>
+                        <label>
+                          Border intensity: {Math.round(uiPreferences.lineStrength)}%
+                          <input
+                            type="range"
+                            min={35}
+                            max={180}
+                            step={1}
+                            value={uiPreferences.lineStrength}
+                            onChange={(event) => updateUiPreference('lineStrength', Number(event.target.value))}
+                          />
+                        </label>
                       </div>
 
                       <div className="appearance-theme-mode">
@@ -12839,6 +12909,15 @@ export default function App() {
                           onChange={(event) => updateUiPreference('outlineMode', event.target.checked ? 'custom' : 'auto')}
                         />
                         Custom outline color (manual mode)
+                      </label>
+
+                      <label className="ui-studio-toggle">
+                        <input
+                          type="checkbox"
+                          checked={uiPreferences.customPalette}
+                          onChange={(event) => updateUiPreference('customPalette', event.target.checked)}
+                        />
+                        Custom surface palette (bg/panel/card/text)
                       </label>
 
                       <div className="ui-studio-actions">
@@ -12898,6 +12977,57 @@ export default function App() {
                         </label>
                       </div>
 
+                      <div className="appearance-accent-grid">
+                        <label>
+                          Background
+                          <input
+                            type="color"
+                            value={appearanceEditableColors.bg}
+                            onChange={(event) => updateUiColorPreference('bgColor', event.target.value)}
+                          />
+                        </label>
+                        <label>
+                          Panel
+                          <input
+                            type="color"
+                            value={appearanceEditableColors.panel}
+                            onChange={(event) => updateUiColorPreference('panelColor', event.target.value)}
+                          />
+                        </label>
+                        <label>
+                          Panel 2
+                          <input
+                            type="color"
+                            value={appearanceEditableColors.panel2}
+                            onChange={(event) => updateUiColorPreference('panel2Color', event.target.value)}
+                          />
+                        </label>
+                        <label>
+                          Card
+                          <input
+                            type="color"
+                            value={appearanceEditableColors.card}
+                            onChange={(event) => updateUiColorPreference('cardColor', event.target.value)}
+                          />
+                        </label>
+                        <label>
+                          Text
+                          <input
+                            type="color"
+                            value={appearanceEditableColors.text}
+                            onChange={(event) => updateUiColorPreference('textColor', event.target.value)}
+                          />
+                        </label>
+                        <label>
+                          Muted text
+                          <input
+                            type="color"
+                            value={appearanceEditableColors.muted}
+                            onChange={(event) => updateUiColorPreference('mutedColor', event.target.value)}
+                          />
+                        </label>
+                      </div>
+
                       <p className="appearance-accent-hint">
                         {uiPreferences.syncAccent
                           ? 'Accent currently follows your profile color. Disable sync to choose custom colors.'
@@ -12908,6 +13038,8 @@ export default function App() {
                           : 'Outline color is in auto mode. Changing outline picker switches it to manual.'}
                         {' '}
                         Stripe/chat/feed pickers apply globally to line highlights and surface frames.
+                        {' '}
+                        Surface palette colors apply app-wide when custom palette is enabled.
                       </p>
 
                       <div className="appearance-preset-row">
