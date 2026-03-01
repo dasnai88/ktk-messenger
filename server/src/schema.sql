@@ -18,7 +18,16 @@ create table if not exists users (
     'polimer',
     'pirotehnik',
     'tehmash',
-    'holodilchik'
+    'holodilchik',
+    'frontend_dev',
+    'backend_dev',
+    'fullstack_dev',
+    'mobile_dev',
+    'devops_engineer',
+    'qa_engineer',
+    'uiux_designer',
+    'data_engineer',
+    'security_engineer'
   )),
   display_name text,
   bio text,
@@ -536,6 +545,43 @@ EXCEPTION WHEN duplicate_column THEN END $$;
 DO $$ BEGIN
   ALTER TABLE users ADD COLUMN warnings_count integer default 0;
 EXCEPTION WHEN duplicate_column THEN END $$;
+
+DO $$
+DECLARE
+  constraint_name text;
+BEGIN
+  FOR constraint_name IN
+    SELECT conname
+    FROM pg_constraint
+    WHERE conrelid = 'users'::regclass
+      AND contype = 'c'
+      AND pg_get_constraintdef(oid) ILIKE '%role%'
+  LOOP
+    EXECUTE format('ALTER TABLE users DROP CONSTRAINT IF EXISTS %I', constraint_name);
+  END LOOP;
+
+  ALTER TABLE users
+    ADD CONSTRAINT chk_users_role_allowed
+    CHECK (role in (
+      'programmist',
+      'tehnik',
+      'polimer',
+      'pirotehnik',
+      'tehmash',
+      'holodilchik',
+      'frontend_dev',
+      'backend_dev',
+      'fullstack_dev',
+      'mobile_dev',
+      'devops_engineer',
+      'qa_engineer',
+      'uiux_designer',
+      'data_engineer',
+      'security_engineer'
+    ));
+EXCEPTION WHEN undefined_table THEN NULL;
+WHEN duplicate_object THEN NULL;
+END $$;
 
 DO $$ BEGIN
   ALTER TABLE messages ADD COLUMN edited_at timestamptz;

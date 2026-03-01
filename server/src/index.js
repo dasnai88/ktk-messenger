@@ -23,7 +23,16 @@ const roles = [
   { value: 'polimer', label: 'Полимер' },
   { value: 'pirotehnik', label: 'Пиротехник' },
   { value: 'tehmash', label: 'Техмаш' },
-  { value: 'holodilchik', label: 'Холодильчик' }
+  { value: 'holodilchik', label: 'Холодильчик' },
+  { value: 'frontend_dev', label: 'Фронтенд разработчик' },
+  { value: 'backend_dev', label: 'Бэкенд разработчик' },
+  { value: 'fullstack_dev', label: 'Фуллстек разработчик' },
+  { value: 'mobile_dev', label: 'Мобильный разработчик' },
+  { value: 'devops_engineer', label: 'DevOps инженер' },
+  { value: 'qa_engineer', label: 'QA инженер' },
+  { value: 'uiux_designer', label: 'UI/UX дизайнер' },
+  { value: 'data_engineer', label: 'Инженер данных' },
+  { value: 'security_engineer', label: 'Инженер ИБ' }
 ]
 
 const jwtSecret = process.env.JWT_SECRET || 'change_me'
