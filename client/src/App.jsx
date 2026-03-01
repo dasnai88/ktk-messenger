@@ -442,11 +442,22 @@ const FEED_LAYOUT_TABS = [
   { value: FEED_LAYOUTS.cards, label: 'Cards' },
   { value: FEED_LAYOUTS.compact, label: 'Compact' }
 ]
+const FEED_QUERY_MAX_LENGTH = 140
 const DEFAULT_FEED_EXPLORER_SETTINGS = {
   sortMode: FEED_SORT_MODES.smart,
   timeWindow: FEED_TIME_WINDOWS.all,
   mediaOnly: false,
   layout: FEED_LAYOUTS.cards
+}
+
+function normalizeFeedFilterValue(value) {
+  return Object.values(FEED_FILTERS).includes(value) ? value : FEED_FILTERS.all
+}
+
+function normalizeFeedQueryValue(value) {
+  return String(value || '')
+    .replace(/[\u0000-\u001f\u007f]/g, '')
+    .slice(0, FEED_QUERY_MAX_LENGTH)
 }
 
 function normalizeFeedExplorerSettings(value) {
@@ -1371,6 +1382,7 @@ export default function App() {
   const [feedQuery, setFeedQuery] = useState('')
   const [activeFeedTag, setActiveFeedTag] = useState('')
   const [feedAuthorFilter, setFeedAuthorFilter] = useState('')
+  const [isFeedToolboxOpen, setIsFeedToolboxOpen] = useState(false)
   const [feedExplorer, setFeedExplorer] = useState(() => {
     try {
       const parsed = JSON.parse(localStorage.getItem(FEED_EXPLORER_STORAGE_KEY) || '{}')
@@ -5745,10 +5757,10 @@ export default function App() {
     timeWindow = null
   } = {}) => {
     setView('feed')
-    setFeedFilter(filter)
+    setFeedFilter(normalizeFeedFilterValue(filter))
     setActiveFeedTag(tag || '')
     setFeedAuthorFilter(authorId || '')
-    setFeedQuery(query || '')
+    setFeedQuery(normalizeFeedQueryValue(query || ''))
     if (sortMode || timeWindow) {
       updateFeedExplorer({
         ...(sortMode ? { sortMode } : {}),
@@ -5802,7 +5814,7 @@ export default function App() {
       return
     }
     if (preset.action === 'filter' && preset.value) {
-      setFeedFilter(preset.value)
+      setFeedFilter(normalizeFeedFilterValue(preset.value))
     }
   }
 
@@ -9085,20 +9097,36 @@ export default function App() {
               )}
             </form>
 
-            <section className="feed-toolbox">
+            <section className={`feed-toolbox ${isFeedToolboxOpen ? 'expanded' : 'collapsed'}`.trim()}>
               <div className="feed-control-head">
                 <div>
-                  <strong>Feed Control Center</strong>
+                  <strong>Управление лентой</strong>
                   <p>
                     {visibleFeedPosts.length} постов • сортировка {feedSortModeLabel} • окно {feedTimeWindowLabel}
                   </p>
                 </div>
-                <div className="feed-live-chip" title="Активные настройки ленты">
-                  <span className={`dot ${feedActiveFilterCount > 0 ? 'active' : ''}`.trim()}></span>
-                  {feedActiveFilterCount > 0 ? `${feedActiveFilterCount} фильтров` : 'Live'}
+                <div className="feed-control-head-actions">
+                  <div className="feed-live-chip" title="Активные настройки ленты">
+                    <span className={`dot ${feedActiveFilterCount > 0 ? 'active' : ''}`.trim()}></span>
+                    {feedActiveFilterCount > 0 ? `${feedActiveFilterCount} фильтров` : 'Базовый режим'}
+                  </div>
+                  <button
+                    type="button"
+                    className={`feed-toolbox-toggle ${isFeedToolboxOpen ? 'active' : ''}`.trim()}
+                    onClick={() => setIsFeedToolboxOpen((prev) => !prev)}
+                    aria-expanded={isFeedToolboxOpen}
+                    aria-controls="feed-toolbox-panel"
+                  >
+                    {isFeedToolboxOpen ? 'Скрыть фильтры' : 'Открыть фильтры'}
+                  </button>
                 </div>
               </div>
 
+              <div
+                id="feed-toolbox-panel"
+                className={`feed-toolbox-panel ${isFeedToolboxOpen ? 'open' : ''}`.trim()}
+                hidden={!isFeedToolboxOpen}
+              >
               <div className="feed-segment-group" role="toolbar" aria-label="Сортировка ленты">
                 <span>Сортировка</span>
                 <div className="feed-segmented">
@@ -9276,7 +9304,7 @@ export default function App() {
                 <input
                   type="text"
                   value={feedQuery}
-                  onChange={(event) => setFeedQuery(event.target.value)}
+                  onChange={(event) => setFeedQuery(normalizeFeedQueryValue(event.target.value))}
                   placeholder="Search posts, authors, or #tags..."
                 />
                 {(feedActiveFilterCount > 0 || feedQuery || activeFeedTag || feedAuthorFilter || feedFilter !== FEED_FILTERS.all) && (
@@ -9348,6 +9376,7 @@ export default function App() {
                     </div>
                   )}
                 </div>
+              </div>
               </div>
             </section>
 

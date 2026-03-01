@@ -4462,12 +4462,34 @@ body {
 }
 
 .feed-toolbox {
-  background: linear-gradient(145deg, rgba(var(--accent-rgb), 0.14), rgba(var(--accent-2-rgb), 0.07));
-  border: 1px solid rgba(var(--accent-rgb), 0.24);
-  border-radius: 20px;
+  background: linear-gradient(140deg, rgba(var(--accent-rgb), 0.16), rgba(var(--accent-2-rgb), 0.08));
+  border: 1px solid rgba(var(--accent-rgb), 0.3);
+  border-radius: 22px;
   padding: 14px;
   display: grid;
   gap: 12px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.2);
+}
+
+.feed-toolbox::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(var(--accent-rgb), 0.16), transparent 45%),
+    radial-gradient(circle at 0% 100%, rgba(var(--accent-2-rgb), 0.12), transparent 48%);
+}
+
+.feed-toolbox > * {
+  position: relative;
+  z-index: 1;
+}
+
+.feed-toolbox.collapsed {
+  gap: 10px;
 }
 
 .feed-composer-insights {
@@ -4561,12 +4583,20 @@ body {
   grid-template-columns: 1fr auto;
   gap: 12px;
   align-items: center;
-  border: 1px solid rgba(var(--accent-rgb), 0.22);
+  border: 1px solid rgba(var(--accent-rgb), 0.24);
   background:
-    radial-gradient(circle at 15% 0%, rgba(var(--accent-rgb), 0.18), transparent 55%),
+    radial-gradient(circle at 15% 0%, rgba(var(--accent-rgb), 0.22), transparent 55%),
     linear-gradient(155deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.01));
   border-radius: 16px;
   padding: 12px;
+}
+
+.feed-control-head-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .feed-control-head strong {
@@ -4591,6 +4621,48 @@ body {
   padding: 8px 10px;
   font-size: 12px;
   font-weight: 700;
+}
+
+.feed-toolbox-toggle {
+  border: 1px solid rgba(var(--accent-rgb), 0.45);
+  background: linear-gradient(140deg, rgba(var(--accent-rgb), 0.24), rgba(var(--accent-2-rgb), 0.2));
+  color: var(--text);
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  cursor: pointer;
+  transition: transform var(--motion-fast) var(--ease-out), border-color var(--motion-fast) var(--ease-out), filter var(--motion-fast) var(--ease-out);
+}
+
+.feed-toolbox-toggle:hover {
+  transform: translateY(-1px);
+  border-color: rgba(var(--accent-rgb), 0.66);
+  filter: saturate(1.07);
+}
+
+.feed-toolbox-toggle.active {
+  border-color: rgba(var(--accent-rgb), 0.75);
+  background: linear-gradient(140deg, rgba(var(--accent-rgb), 0.3), rgba(var(--accent-2-rgb), 0.24));
+}
+
+.feed-toolbox-panel {
+  display: grid;
+  gap: 12px;
+  animation: feedToolboxPanelIn 0.2s var(--ease-out);
+}
+
+@keyframes feedToolboxPanelIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .feed-live-chip .dot {
@@ -5524,6 +5596,16 @@ body {
 
   .feed-control-head {
     grid-template-columns: 1fr;
+  }
+
+  .feed-control-head-actions {
+    justify-content: stretch;
+  }
+
+  .feed-live-chip,
+  .feed-toolbox-toggle {
+    width: 100%;
+    justify-content: center;
   }
 
   .feed-control-grid {
