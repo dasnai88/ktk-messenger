@@ -2098,6 +2098,12 @@ export default function App() {
     const done = profileEditorChecklist.filter((item) => item.done).length
     return Math.round((done / profileEditorChecklist.length) * 100)
   }, [profileEditorChecklist])
+  const profileEditorDoneCount = useMemo(() => (
+    profileEditorChecklist.filter((item) => item.done).length
+  ), [profileEditorChecklist])
+  const profileEditorPendingChecklist = useMemo(() => (
+    profileEditorChecklist.filter((item) => !item.done)
+  ), [profileEditorChecklist])
   const normalizedThemeColor = normalizeHexColor(profileForm.themeColor, '#7a1f1d')
   const profileThemeHsl = useMemo(() => (
     rgbToHsl(hexToRgb(normalizedThemeColor))
@@ -10860,16 +10866,30 @@ export default function App() {
               </section>
               <section className="profile-pro-card">
                 <div className="profile-pro-head">
-                  <h3>Чеклист профиля</h3>
-                  <span>{profileEditorChecklist.filter((item) => item.done).length}/{profileEditorChecklist.length}</span>
+                  <h3>Мини-подсказка</h3>
+                  <span>{profileEditorDoneCount}/{profileEditorChecklist.length}</span>
                 </div>
-                <div className="profile-checklist">
-                  {profileEditorChecklist.map((item) => (
-                    <div key={item.id} className={item.done ? 'done' : ''}>
-                      <span>{item.done ? '✓' : '•'}</span>
-                      {item.label}
+                <div className="profile-checklist-mini">
+                  {profileEditorPendingChecklist.length === 0 ? (
+                    <div className="profile-checklist-mini-pill done">
+                      <span>✓</span>
+                      Профиль заполнен
                     </div>
-                  ))}
+                  ) : (
+                    <>
+                      {profileEditorPendingChecklist.slice(0, 2).map((item) => (
+                        <div key={item.id} className="profile-checklist-mini-pill">
+                          <span>•</span>
+                          {item.label}
+                        </div>
+                      ))}
+                      {profileEditorPendingChecklist.length > 2 ? (
+                        <div className="profile-checklist-mini-extra">
+                          +{profileEditorPendingChecklist.length - 2} ещё
+                        </div>
+                      ) : null}
+                    </>
+                  )}
                 </div>
               </section>
             </div>
