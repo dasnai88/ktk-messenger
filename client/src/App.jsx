@@ -1,4 +1,4 @@
-﻿import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { io } from 'socket.io-client'
 import {
@@ -96,23 +96,23 @@ const icons = {
 }
 
 const fallbackRoles = [
-  { value: 'programmist', label: 'Программист' },
-  { value: 'tehnik', label: 'Техник' },
-  { value: 'polimer', label: 'Полимер' },
-  { value: 'pirotehnik', label: 'Пиротехник' },
-  { value: 'tehmash', label: 'Техмаш' },
-  { value: 'holodilchik', label: 'Холодильчик' },
   { value: 'student', label: 'Студент' },
   { value: 'teacher', label: 'Учитель' },
-  { value: 'frontend_dev', label: 'Фронтенд разработчик' },
-  { value: 'backend_dev', label: 'Бэкенд разработчик' },
-  { value: 'fullstack_dev', label: 'Фуллстек разработчик' },
-  { value: 'mobile_dev', label: 'Мобильный разработчик' },
-  { value: 'devops_engineer', label: 'DevOps инженер' },
-  { value: 'qa_engineer', label: 'QA инженер' },
-  { value: 'uiux_designer', label: 'UI/UX дизайнер' },
-  { value: 'data_engineer', label: 'Инженер данных' },
-  { value: 'security_engineer', label: 'Инженер ИБ' }
+  { value: 'programmist', label: 'Программист' },
+  { value: 'biomed', label: 'Биомед' },
+  { value: 'holodilchik', label: 'Холодильчик' },
+  { value: 'tehmash', label: 'Техмаш' },
+  { value: 'promteh', label: 'Промтех' },
+  { value: 'laborant', label: 'Лаборант' },
+  { value: 'polimer', label: 'Полимер' },
+  { value: 'energomat', label: 'Энергомат' },
+  { value: 'himanaliz', label: 'Химанализ' },
+  { value: 'pishrast', label: 'Пищраст' },
+  { value: 'pishzhiv', label: 'Пищжив' },
+  { value: 'legprom', label: 'Легпром' },
+  { value: 'povar', label: 'Повар' },
+  { value: 'turizm', label: 'Туризм' },
+  { value: 'deloproizvod', label: 'Делопроизвод' }
 ]
 
 const initialRegister = {

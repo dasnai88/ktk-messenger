@@ -15,26 +15,25 @@ create table if not exists roles (
 
 insert into roles (value, label)
 values
-  ('programmist', 'Программист'),
-  ('tehnik', 'Техник'),
-  ('polimer', 'Полимер'),
-  ('pirotehnik', 'Пиротехник'),
-  ('tehmash', 'Техмаш'),
-  ('holodilchik', 'Холодильчик'),
   ('student', 'Студент'),
   ('teacher', 'Учитель'),
-  ('frontend_dev', 'Фронтенд разработчик'),
-  ('backend_dev', 'Бэкенд разработчик'),
-  ('fullstack_dev', 'Фуллстек разработчик'),
-  ('mobile_dev', 'Мобильный разработчик'),
-  ('devops_engineer', 'DevOps инженер'),
-  ('qa_engineer', 'QA инженер'),
-  ('uiux_designer', 'UI/UX дизайнер'),
-  ('data_engineer', 'Инженер данных'),
-  ('security_engineer', 'Инженер ИБ')
+  ('programmist', 'Программист'),
+  ('biomed', 'Биомед'),
+  ('holodilchik', 'Холодильчик'),
+  ('tehmash', 'Техмаш'),
+  ('promteh', 'Промтех'),
+  ('laborant', 'Лаборант'),
+  ('polimer', 'Полимер'),
+  ('energomat', 'Энергомат'),
+  ('himanaliz', 'Химанализ'),
+  ('pishrast', 'Пищраст'),
+  ('pishzhiv', 'Пищжив'),
+  ('legprom', 'Легпром'),
+  ('povar', 'Повар'),
+  ('turizm', 'Туризм'),
+  ('deloproizvod', 'Делопроизвод')
 on conflict (value) do update
 set label = excluded.label;
-
 create table if not exists users (
   id uuid primary key default gen_random_uuid(),
   login text unique not null,
@@ -571,31 +570,53 @@ DECLARE
 BEGIN
   INSERT INTO roles (value, label)
   VALUES
-    ('programmist', 'Программист'),
-    ('tehnik', 'Техник'),
-    ('polimer', 'Полимер'),
-    ('pirotehnik', 'Пиротехник'),
-    ('tehmash', 'Техмаш'),
-    ('holodilchik', 'Холодильчик'),
     ('student', 'Студент'),
     ('teacher', 'Учитель'),
-    ('frontend_dev', 'Фронтенд разработчик'),
-    ('backend_dev', 'Бэкенд разработчик'),
-    ('fullstack_dev', 'Фуллстек разработчик'),
-    ('mobile_dev', 'Мобильный разработчик'),
-    ('devops_engineer', 'DevOps инженер'),
-    ('qa_engineer', 'QA инженер'),
-    ('uiux_designer', 'UI/UX дизайнер'),
-    ('data_engineer', 'Инженер данных'),
-    ('security_engineer', 'Инженер ИБ')
+    ('programmist', 'Программист'),
+    ('biomed', 'Биомед'),
+    ('holodilchik', 'Холодильчик'),
+    ('tehmash', 'Техмаш'),
+    ('promteh', 'Промтех'),
+    ('laborant', 'Лаборант'),
+    ('polimer', 'Полимер'),
+    ('energomat', 'Энергомат'),
+    ('himanaliz', 'Химанализ'),
+    ('pishrast', 'Пищраст'),
+    ('pishzhiv', 'Пищжив'),
+    ('legprom', 'Легпром'),
+    ('povar', 'Повар'),
+    ('turizm', 'Туризм'),
+    ('deloproizvod', 'Делопроизвод')
   ON CONFLICT (value) DO UPDATE
   SET label = EXCLUDED.label;
+  UPDATE users
+  SET role = 'student'
+  WHERE role IS NULL
+     OR role NOT IN (
+       'student', 'teacher', 'programmist', 'biomed', 'holodilchik', 'tehmash',
+       'promteh', 'laborant', 'polimer', 'energomat', 'himanaliz', 'pishrast',
+       'pishzhiv', 'legprom', 'povar', 'turizm', 'deloproizvod'
+     );
 
-  INSERT INTO roles (value, label)
-  SELECT DISTINCT role, initcap(replace(role, '_', ' '))
+  DELETE FROM user_roles
+  WHERE role_value NOT IN (
+    'student', 'teacher', 'programmist', 'biomed', 'holodilchik', 'tehmash',
+    'promteh', 'laborant', 'polimer', 'energomat', 'himanaliz', 'pishrast',
+    'pishzhiv', 'legprom', 'povar', 'turizm', 'deloproizvod'
+  );
+
+  INSERT INTO user_roles (user_id, role_value)
+  SELECT id, role
   FROM users
   WHERE role IS NOT NULL
-  ON CONFLICT (value) DO NOTHING;
+  ON CONFLICT (user_id, role_value) DO NOTHING;
+
+  DELETE FROM roles
+  WHERE value NOT IN (
+    'student', 'teacher', 'programmist', 'biomed', 'holodilchik', 'tehmash',
+    'promteh', 'laborant', 'polimer', 'energomat', 'himanaliz', 'pishrast',
+    'pishzhiv', 'legprom', 'povar', 'turizm', 'deloproizvod'
+  );
 
   FOR constraint_name IN
     SELECT conname

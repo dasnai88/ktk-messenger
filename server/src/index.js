@@ -18,24 +18,25 @@ const app = express()
 const server = http.createServer(app)
 
 const defaultRoles = [
-  { value: 'programmist', label: 'Программист' },
-  { value: 'tehnik', label: 'Техник' },
-  { value: 'polimer', label: 'Полимер' },
-  { value: 'pirotehnik', label: 'Пиротехник' },
-  { value: 'tehmash', label: 'Техмаш' },
-  { value: 'holodilchik', label: 'Холодильчик' },
-  { value: 'student', label: 'Студент' },
-  { value: 'teacher', label: 'Учитель' },
-  { value: 'frontend_dev', label: 'Фронтенд разработчик' },
-  { value: 'backend_dev', label: 'Бэкенд разработчик' },
-  { value: 'fullstack_dev', label: 'Фуллстек разработчик' },
-  { value: 'mobile_dev', label: 'Мобильный разработчик' },
-  { value: 'devops_engineer', label: 'DevOps инженер' },
-  { value: 'qa_engineer', label: 'QA инженер' },
-  { value: 'uiux_designer', label: 'UI/UX дизайнер' },
-  { value: 'data_engineer', label: 'Инженер данных' },
-  { value: 'security_engineer', label: 'Инженер ИБ' }
+  { value: 'student', label: 'РЎС‚СѓРґРµРЅС‚' },
+  { value: 'teacher', label: 'РЈС‡РёС‚РµР»СЊ' },
+  { value: 'programmist', label: 'РџСЂРѕРіСЂР°РјРјРёСЃС‚' },
+  { value: 'biomed', label: 'Р‘РёРѕРјРµРґ' },
+  { value: 'holodilchik', label: 'РҐРѕР»РѕРґРёР»СЊС‡РёРє' },
+  { value: 'tehmash', label: 'РўРµС…РјР°С€' },
+  { value: 'promteh', label: 'РџСЂРѕРјС‚РµС…' },
+  { value: 'laborant', label: 'Р›Р°Р±РѕСЂР°РЅС‚' },
+  { value: 'polimer', label: 'РџРѕР»РёРјРµСЂ' },
+  { value: 'energomat', label: 'Р­РЅРµСЂРіРѕРјР°С‚' },
+  { value: 'himanaliz', label: 'РҐРёРјР°РЅР°Р»РёР·' },
+  { value: 'pishrast', label: 'РџРёС‰СЂР°СЃС‚' },
+  { value: 'pishzhiv', label: 'РџРёС‰Р¶РёРІ' },
+  { value: 'legprom', label: 'Р›РµРіРїСЂРѕРј' },
+  { value: 'povar', label: 'РџРѕРІР°СЂ' },
+  { value: 'turizm', label: 'РўСѓСЂРёР·Рј' },
+  { value: 'deloproizvod', label: 'Р”РµР»РѕРїСЂРѕРёР·РІРѕРґ' }
 ]
+const allowedRoleValues = new Set(defaultRoles.map((item) => item.value))
 
 const jwtSecret = process.env.JWT_SECRET || 'change_me'
 const uploadStorage = String(process.env.UPLOAD_STORAGE || 'disk').toLowerCase()
@@ -72,7 +73,7 @@ const pollQuestionMaxLength = 240
 const pollOptionMaxLength = 120
 const pollOptionMinCount = 2
 const pollOptionMaxCount = 10
-const PERSONAL_FAVORITES_TITLE = 'Избранное'
+const PERSONAL_FAVORITES_TITLE = 'РР·Р±СЂР°РЅРЅРѕРµ'
 
 if (webPushEnabled) {
   webpush.setVapidDetails(webPushSubject, webPushPublicKey, webPushPrivateKey)
@@ -218,7 +219,7 @@ const authLimiter = rateLimit({
   max: 20,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { error: 'Слишком много попыток. Попробуйте позже.' }
+  message: { error: 'РЎР»РёС€РєРѕРј РјРЅРѕРіРѕ РїРѕРїС‹С‚РѕРє. РџРѕРїСЂРѕР±СѓР№С‚Рµ РїРѕР·Р¶Рµ.' }
 })
 
 const uploadLimiter = rateLimit({
@@ -444,28 +445,32 @@ function isValidRoleLabel(roleLabel) {
 }
 
 async function getAvailableRoles() {
+  const roleLabelByValue = new Map(defaultRoles.map((item) => [item.value, item.label]))
   try {
     const result = await pool.query(
       `select value, label
        from roles
-       order by label asc, value asc`
+       where value = any($1::text[])`,
+      [Array.from(allowedRoleValues)]
     )
-    if (result.rowCount > 0) {
-      return result.rows.map((row) => ({
-        value: row.value,
-        label: row.label
-      }))
-    }
+    result.rows.forEach((row) => {
+      const value = normalizeRoleValue(row.value)
+      if (!value || !allowedRoleValues.has(value)) return
+      roleLabelByValue.set(value, row.label || roleLabelByValue.get(value))
+    })
   } catch (err) {
     if (!(err && err.code === '42P01')) {
       throw err
     }
   }
-  return defaultRoles
+  return defaultRoles.map((item) => ({
+    value: item.value,
+    label: roleLabelByValue.get(item.value) || item.label
+  }))
 }
 
 async function hasAllowedRole(roleValue) {
-  if (!roleValue) return false
+  if (!roleValue || !allowedRoleValues.has(roleValue)) return false
   try {
     const result = await pool.query(
       'select 1 from roles where value = $1 limit 1',
@@ -476,8 +481,9 @@ async function hasAllowedRole(roleValue) {
     if (!(err && err.code === '42P01')) {
       throw err
     }
+    return true
   }
-  return defaultRoles.some((item) => item.value === roleValue)
+  return false
 }
 
 function normalizeRoleValues(value) {
@@ -493,23 +499,27 @@ function normalizeRoleValues(value) {
 
 async function getAllowedRoleValues(roleValues) {
   const normalized = normalizeRoleValues(roleValues)
-  if (normalized.length === 0) return []
+  const normalizedAllowed = normalized.filter((item) => allowedRoleValues.has(item))
+  if (normalizedAllowed.length === 0) return []
   try {
     const result = await pool.query(
       `select value
        from roles
        where value = any($1::text[])`,
-      [normalized]
+      [normalizedAllowed]
     )
-    const allowed = new Set(result.rows.map((row) => row.value))
-    return normalized.filter((item) => allowed.has(item))
+    const allowed = new Set(
+      result.rows
+        .map((row) => normalizeRoleValue(row.value))
+        .filter((item) => allowedRoleValues.has(item))
+    )
+    return normalizedAllowed.filter((item) => allowed.has(item))
   } catch (err) {
     if (!(err && err.code === '42P01')) {
       throw err
     }
   }
-  const fallback = new Set(defaultRoles.map((item) => item.value))
-  return normalized.filter((item) => fallback.has(item))
+  return normalizedAllowed
 }
 
 function normalizeUserRolesFromRow(row) {
@@ -1990,7 +2000,7 @@ app.delete('/api/notifications/push-subscription', auth, ensureNotBanned, async 
 app.post('/api/me/avatar', uploadLimiter, auth, ensureNotBanned, imageUpload.single('avatar'), async (req, res) => {
   try {
     if (!req.file) {
-      return res.status(400).json({ error: 'Файл не загружен' })
+      return res.status(400).json({ error: 'Р¤Р°Р№Р» РЅРµ Р·Р°РіСЂСѓР¶РµРЅ' })
     }
     const avatarUrl = await storeUpload(req.file)
     const result = await pool.query(
@@ -2009,7 +2019,7 @@ app.post('/api/me/avatar', uploadLimiter, auth, ensureNotBanned, imageUpload.sin
 app.post('/api/me/banner', uploadLimiter, auth, ensureNotBanned, imageUpload.single('banner'), async (req, res) => {
   try {
     if (!req.file) {
-      return res.status(400).json({ error: 'Файл не загружен' })
+      return res.status(400).json({ error: 'Р¤Р°Р№Р» РЅРµ Р·Р°РіСЂСѓР¶РµРЅ' })
     }
     const bannerUrl = await storeUpload(req.file)
     const result = await pool.query(
@@ -2909,7 +2919,7 @@ app.get('/api/conversations/:id/bookmarks', auth, ensureNotBanned, async (req, r
       senderUsername: row.sender_username || null,
       senderDisplayName: row.sender_display_name || null,
       preview: row.poll_question
-        ? `📊 ${normalizePollQuestion(row.poll_question)}`
+        ? `рџ“Љ ${normalizePollQuestion(row.poll_question)}`
         : getMessagePreviewText(row.body, row.attachment_url, row.attachment_kind)
     }))
 
@@ -3033,7 +3043,7 @@ app.post('/api/conversations/:id/polls', messageLimiter, auth, ensureNotBanned, 
         : senderName
       const pushPayload = {
         title: pushTitle,
-        body: `📊 ${question}`,
+        body: `рџ“Љ ${question}`,
         conversationId,
         url: `/?conversation=${conversationId}`,
         tag: `conversation-${conversationId}`,
@@ -3602,7 +3612,7 @@ app.post('/api/posts', uploadLimiter, auth, ensureNotBanned, imageUpload.single(
   try {
     const body = req.body.body || ''
     if (!req.file && !isValidMessage(body)) {
-      return res.status(400).json({ error: 'Пустой пост' })
+      return res.status(400).json({ error: 'РџСѓСЃС‚РѕР№ РїРѕСЃС‚' })
     }
     const imageUrl = req.file ? await storeUpload(req.file) : null
     const result = await pool.query(
@@ -3651,7 +3661,7 @@ app.post('/api/posts/:id/repost', auth, ensureNotBanned, async (req, res) => {
     )
     if (original.rowCount === 0) return res.status(404).json({ error: 'Post not found' })
     if (original.rows[0].repost_of && original.rows[0].author_id === req.userId) {
-      return res.status(400).json({ error: 'Нельзя репостить свой репост' })
+      return res.status(400).json({ error: 'РќРµР»СЊР·СЏ СЂРµРїРѕСЃС‚РёС‚СЊ СЃРІРѕР№ СЂРµРїРѕСЃС‚' })
     }
 
     const existing = await pool.query(
@@ -3727,7 +3737,7 @@ app.post('/api/posts/:id/comments', auth, ensureNotBanned, async (req, res) => {
   try {
     const postId = req.params.id
     const body = String(req.body.body || '').trim()
-    if (!body) return res.status(400).json({ error: 'Комментарий пуст' })
+    if (!body) return res.status(400).json({ error: 'РљРѕРјРјРµРЅС‚Р°СЂРёР№ РїСѓСЃС‚' })
     const result = await pool.query(
       `insert into post_comments (post_id, user_id, body)
        values ($1, $2, $3)
@@ -3905,7 +3915,7 @@ app.post('/api/messages/:id/bookmark', auth, ensureNotBanned, async (req, res) =
       senderUsername: messageRow.sender_username || null,
       senderDisplayName: messageRow.sender_display_name || null,
       preview: pollQuestion
-        ? `📊 ${pollQuestion}`
+        ? `рџ“Љ ${pollQuestion}`
         : getMessagePreviewText(messageRow.body, messageRow.attachment_url, messageRow.attachment_kind)
     }
 
@@ -4485,6 +4495,9 @@ app.post('/api/admin/roles', auth, adminOnly, async (req, res) => {
     if (!isValidRoleLabel(label)) {
       return res.status(400).json({ error: 'Role label must be 2-48 characters' })
     }
+    if (!allowedRoleValues.has(value)) {
+      return res.status(400).json({ error: 'Role is outside the allowed catalog' })
+    }
 
     const result = await pool.query(
       `insert into roles (value, label)
@@ -4621,16 +4634,16 @@ app.get('/api/presence', auth, async (req, res) => {
 
 app.use((err, req, res, next) => {
   if (err && err.message && err.message.includes('Only images')) {
-    return res.status(400).json({ error: 'Разрешены только изображения (jpg, png, webp, gif)' })
+    return res.status(400).json({ error: 'Р Р°Р·СЂРµС€РµРЅС‹ С‚РѕР»СЊРєРѕ РёР·РѕР±СЂР°Р¶РµРЅРёСЏ (jpg, png, webp, gif)' })
   }
   if (err && err.message && err.message.includes('Only GIF files')) {
     return res.status(400).json({ error: 'Only GIF files are allowed' })
   }
   if (err && err.message && err.message.includes('Only image or video attachments')) {
-    return res.status(400).json({ error: 'Разрешены только изображения и видео файлы.' })
+    return res.status(400).json({ error: 'Р Р°Р·СЂРµС€РµРЅС‹ С‚РѕР»СЊРєРѕ РёР·РѕР±СЂР°Р¶РµРЅРёСЏ Рё РІРёРґРµРѕ С„Р°Р№Р»С‹.' })
   }
   if (err && err.message && err.message.includes('Only audio files')) {
-    return res.status(400).json({ error: 'Разрешены только аудио файлы (mp3, wav, ogg, webm, m4a, aac)' })
+    return res.status(400).json({ error: 'Р Р°Р·СЂРµС€РµРЅС‹ С‚РѕР»СЊРєРѕ Р°СѓРґРёРѕ С„Р°Р№Р»С‹ (mp3, wav, ogg, webm, m4a, aac)' })
   }
   console.error('Unhandled error', err)
   res.status(500).json({ error: 'Unexpected error' })
