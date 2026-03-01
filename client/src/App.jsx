@@ -1383,6 +1383,7 @@ export default function App() {
   const [activeFeedTag, setActiveFeedTag] = useState('')
   const [feedAuthorFilter, setFeedAuthorFilter] = useState('')
   const [isFeedToolboxOpen, setIsFeedToolboxOpen] = useState(false)
+  const [isFeedInsightsOpen, setIsFeedInsightsOpen] = useState(false)
   const [feedExplorer, setFeedExplorer] = useState(() => {
     try {
       const parsed = JSON.parse(localStorage.getItem(FEED_EXPLORER_STORAGE_KEY) || '{}')
@@ -9113,7 +9114,12 @@ export default function App() {
                   <button
                     type="button"
                     className={`feed-toolbox-toggle ${isFeedToolboxOpen ? 'active' : ''}`.trim()}
-                    onClick={() => setIsFeedToolboxOpen((prev) => !prev)}
+                    onClick={() => {
+                      if (isFeedToolboxOpen) {
+                        setIsFeedInsightsOpen(false)
+                      }
+                      setIsFeedToolboxOpen((prev) => !prev)
+                    }}
                     aria-expanded={isFeedToolboxOpen}
                     aria-controls="feed-toolbox-panel"
                   >
@@ -9205,98 +9211,34 @@ export default function App() {
                 </button>
               </div>
 
-              <div className="feed-digest-grid">
-                <article className="feed-digest-card">
-                  <span>В выборке</span>
-                  <strong>{feedDigest.visible}</strong>
-                  <small>{feedDigest.activeAuthors} активных авторов</small>
-                </article>
-                <article className="feed-digest-card">
-                  <span>Momentum</span>
-                  <strong>{feedDigest.momentum}</strong>
-                  <small>{feedDigest.freshCount} свежих за ~6ч</small>
-                </article>
-                <article className="feed-digest-card">
-                  <span>Средний отклик</span>
-                  <strong>{feedDigest.avgEngagement}</strong>
-                  <small>{feedDigest.mediaShare}% постов с медиа</small>
-                </article>
-                <article className="feed-digest-card">
-                  <span>Лидер темы</span>
-                  <strong>{feedDigest.hottestTag || '—'}</strong>
-                  <small>{feedDigest.hottestTag ? 'самый частый тег' : 'без доминирующего тега'}</small>
-                </article>
-              </div>
-
-              {feedQuickPresets.length > 0 && (
-                <div className="feed-presets-panel">
-                  <div className="feed-presets-head">
-                    <strong>Быстрые пресеты</strong>
-                    <span>один клик для фокуса</span>
-                  </div>
-                  <div className="feed-presets-list">
-                    {feedQuickPresets.map((preset) => (
-                      <button
-                        key={preset.id}
-                        type="button"
-                        className="feed-preset-item"
-                        onClick={() => applyFeedQuickPreset(preset)}
-                      >
-                        <span>{preset.label}</span>
-                        <small>{preset.hint}</small>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              <div className="feed-metrics">
-                <article>
-                  <span>Total posts</span>
-                  <strong>{feedMetrics.total}</strong>
-                </article>
-                <article>
-                  <span>My posts</span>
-                  <strong>{feedMetrics.mine}</strong>
-                </article>
-                <article>
-                  <span>Bookmarks</span>
-                  <strong>{feedMetrics.bookmarked}</strong>
-                </article>
-                <article>
-                  <span>Engagement</span>
-                  <strong>{feedMetrics.engagement}</strong>
-                </article>
-              </div>
-
               <div className="feed-filters-row">
                 <button
                   type="button"
                   className={`feed-filter-pill ${feedFilter === FEED_FILTERS.all ? 'active' : ''}`.trim()}
                   onClick={() => setFeedFilter(FEED_FILTERS.all)}
                 >
-                  All
+                  Все
                 </button>
                 <button
                   type="button"
                   className={`feed-filter-pill ${feedFilter === FEED_FILTERS.popular ? 'active' : ''}`.trim()}
                   onClick={() => setFeedFilter(FEED_FILTERS.popular)}
                 >
-                  Popular
+                  Популярные
                 </button>
                 <button
                   type="button"
                   className={`feed-filter-pill ${feedFilter === FEED_FILTERS.mine ? 'active' : ''}`.trim()}
                   onClick={() => setFeedFilter(FEED_FILTERS.mine)}
                 >
-                  Mine
+                  Мои
                 </button>
                 <button
                   type="button"
                   className={`feed-filter-pill ${feedFilter === FEED_FILTERS.bookmarks ? 'active' : ''}`.trim()}
                   onClick={() => setFeedFilter(FEED_FILTERS.bookmarks)}
                 >
-                  Bookmarks
+                  Закладки
                 </button>
               </div>
 
@@ -9305,11 +9247,11 @@ export default function App() {
                   type="text"
                   value={feedQuery}
                   onChange={(event) => setFeedQuery(normalizeFeedQueryValue(event.target.value))}
-                  placeholder="Search posts, authors, or #tags..."
+                  placeholder="Поиск по постам, авторам и #тегам..."
                 />
                 {(feedActiveFilterCount > 0 || feedQuery || activeFeedTag || feedAuthorFilter || feedFilter !== FEED_FILTERS.all) && (
                   <button type="button" className="ghost" onClick={resetFeedFilters}>
-                    Reset
+                    Сбросить
                   </button>
                 )}
               </div>
@@ -9329,52 +9271,133 @@ export default function App() {
                 </div>
               )}
 
-              <div className="feed-radar">
-                <div className="feed-radar-card">
-                  <div className="feed-radar-head">
-                    <strong>Топ авторы</strong>
-                    <span>по вовлечению</span>
-                  </div>
-                  {topFeedAuthors.length === 0 ? (
-                    <div className="empty small">Пока нет данных</div>
-                  ) : (
-                    <div className="feed-author-list">
-                      {topFeedAuthors.map((author) => (
-                        <button
-                          key={`feed-top-author-${author.id}`}
-                          type="button"
-                          className={`feed-author-item ${feedAuthorFilter === author.id ? 'active' : ''}`.trim()}
-                          onClick={() => toggleFeedAuthorFilter(author.id)}
-                        >
-                          <span>{author.displayName || author.username}</span>
-                          <small>{author.engagement} pts</small>
-                        </button>
-                      ))}
-                    </div>
-                  )}
+              <button
+                type="button"
+                className={`feed-insights-toggle ${isFeedInsightsOpen ? 'active' : ''}`.trim()}
+                onClick={() => setIsFeedInsightsOpen((prev) => !prev)}
+                aria-expanded={isFeedInsightsOpen}
+                aria-controls="feed-insights-panel"
+              >
+                <span>Аналитика и радар</span>
+                <small>{isFeedInsightsOpen ? 'Скрыть блок' : 'Показать блок'}</small>
+              </button>
+
+              <div
+                id="feed-insights-panel"
+                className={`feed-insights-panel ${isFeedInsightsOpen ? 'open' : ''}`.trim()}
+                hidden={!isFeedInsightsOpen}
+              >
+                <div className="feed-digest-grid">
+                  <article className="feed-digest-card">
+                    <span>В выборке</span>
+                    <strong>{feedDigest.visible}</strong>
+                    <small>{feedDigest.activeAuthors} активных авторов</small>
+                  </article>
+                  <article className="feed-digest-card">
+                    <span>Импульс</span>
+                    <strong>{feedDigest.momentum}</strong>
+                    <small>{feedDigest.freshCount} свежих за ~6ч</small>
+                  </article>
+                  <article className="feed-digest-card">
+                    <span>Средний отклик</span>
+                    <strong>{feedDigest.avgEngagement}</strong>
+                    <small>{feedDigest.mediaShare}% постов с медиа</small>
+                  </article>
+                  <article className="feed-digest-card">
+                    <span>Лидер темы</span>
+                    <strong>{feedDigest.hottestTag || '—'}</strong>
+                    <small>{feedDigest.hottestTag ? 'самый частый тег' : 'без доминирующего тега'}</small>
+                  </article>
                 </div>
-                <div className="feed-radar-card">
-                  <div className="feed-radar-head">
-                    <strong>Горячие посты</strong>
-                    <span>live</span>
-                  </div>
-                  {hotFeedPosts.length === 0 ? (
-                    <div className="empty small">Пока тихо</div>
-                  ) : (
-                    <div className="feed-hot-list">
-                      {hotFeedPosts.map((item) => (
+
+                {feedQuickPresets.length > 0 && (
+                  <div className="feed-presets-panel">
+                    <div className="feed-presets-head">
+                      <strong>Быстрые пресеты</strong>
+                      <span>один клик для фокуса</span>
+                    </div>
+                    <div className="feed-presets-list">
+                      {feedQuickPresets.map((preset) => (
                         <button
-                          key={`feed-hot-${item.post.id}`}
+                          key={preset.id}
                           type="button"
-                          className="feed-hot-item"
-                          onClick={() => openProfile(item.post.author.username)}
+                          className="feed-preset-item"
+                          onClick={() => applyFeedQuickPreset(preset)}
                         >
-                          <span>{item.post.author.displayName || item.post.author.username}</span>
-                          <small>{item.score} pts</small>
+                          <span>{preset.label}</span>
+                          <small>{preset.hint}</small>
                         </button>
                       ))}
                     </div>
-                  )}
+                  </div>
+                )}
+
+                <div className="feed-metrics">
+                  <article>
+                    <span>Всего постов</span>
+                    <strong>{feedMetrics.total}</strong>
+                  </article>
+                  <article>
+                    <span>Мои посты</span>
+                    <strong>{feedMetrics.mine}</strong>
+                  </article>
+                  <article>
+                    <span>Закладки</span>
+                    <strong>{feedMetrics.bookmarked}</strong>
+                  </article>
+                  <article>
+                    <span>Вовлеченность</span>
+                    <strong>{feedMetrics.engagement}</strong>
+                  </article>
+                </div>
+
+                <div className="feed-radar">
+                  <div className="feed-radar-card">
+                    <div className="feed-radar-head">
+                      <strong>Топ авторы</strong>
+                      <span>по вовлечению</span>
+                    </div>
+                    {topFeedAuthors.length === 0 ? (
+                      <div className="empty small">Пока нет данных</div>
+                    ) : (
+                      <div className="feed-author-list">
+                        {topFeedAuthors.map((author) => (
+                          <button
+                            key={`feed-top-author-${author.id}`}
+                            type="button"
+                            className={`feed-author-item ${feedAuthorFilter === author.id ? 'active' : ''}`.trim()}
+                            onClick={() => toggleFeedAuthorFilter(author.id)}
+                          >
+                            <span>{author.displayName || author.username}</span>
+                            <small>{author.engagement} pts</small>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div className="feed-radar-card">
+                    <div className="feed-radar-head">
+                      <strong>Горячие посты</strong>
+                      <span>live</span>
+                    </div>
+                    {hotFeedPosts.length === 0 ? (
+                      <div className="empty small">Пока тихо</div>
+                    ) : (
+                      <div className="feed-hot-list">
+                        {hotFeedPosts.map((item) => (
+                          <button
+                            key={`feed-hot-${item.post.id}`}
+                            type="button"
+                            className="feed-hot-item"
+                            onClick={() => openProfile(item.post.author.username)}
+                          >
+                            <span>{item.post.author.displayName || item.post.author.username}</span>
+                            <small>{item.score} pts</small>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
               </div>

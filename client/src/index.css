@@ -4653,6 +4653,65 @@ body {
   animation: feedToolboxPanelIn 0.2s var(--ease-out);
 }
 
+.feed-insights-toggle {
+  border: 1px solid rgba(var(--accent-rgb), 0.35);
+  background: linear-gradient(135deg, rgba(var(--accent-rgb), 0.16), rgba(var(--accent-2-rgb), 0.12));
+  color: var(--text);
+  border-radius: 14px;
+  padding: 10px 12px;
+  width: 100%;
+  text-align: left;
+  display: grid;
+  gap: 2px;
+  cursor: pointer;
+  position: relative;
+  transition: border-color var(--motion-fast) var(--ease-out), filter var(--motion-fast) var(--ease-out), transform var(--motion-fast) var(--ease-out);
+}
+
+.feed-insights-toggle span {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.feed-insights-toggle small {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.feed-insights-toggle::after {
+  content: '▾';
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--muted);
+  transition: transform var(--motion-fast) var(--ease-out), color var(--motion-fast) var(--ease-out);
+}
+
+.feed-insights-toggle:hover {
+  border-color: rgba(var(--accent-rgb), 0.58);
+  filter: saturate(1.06);
+}
+
+.feed-insights-toggle.active {
+  border-color: rgba(var(--accent-rgb), 0.66);
+}
+
+.feed-insights-toggle.active::after {
+  transform: translateY(-50%) rotate(180deg);
+  color: var(--text);
+}
+
+.feed-insights-panel {
+  border: 1px dashed rgba(var(--accent-rgb), 0.28);
+  border-radius: 16px;
+  padding: 10px;
+  display: grid;
+  gap: 10px;
+  background: rgba(0, 0, 0, 0.14);
+  animation: feedToolboxPanelIn 0.18s var(--ease-out);
+}
+
 @keyframes feedToolboxPanelIn {
   from {
     opacity: 0;
