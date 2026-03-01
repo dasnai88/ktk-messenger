@@ -15020,7 +15020,9 @@ export default function App() {
               </div>
               <div className="mini-profile-identity">
                 <strong>
-                  {miniProfileCard.user.displayName || miniProfileCard.user.username || 'Пользователь'}
+                  <span className="mini-profile-name">
+                    {miniProfileCard.user.displayName || miniProfileCard.user.username || 'Пользователь'}
+                  </span>
                   {miniProfileCard.user.isVerified && <span className="verified-mark mini-profile-verified" title="Верифицированный профиль">✓</span>}
                   {miniProfileCard.user.isOwner && <span className="owner-mark mini-profile-owner" title="Owner">*</span>}
                 </strong>

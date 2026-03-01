@@ -6732,6 +6732,10 @@ pre,
   min-width: 0;
   font-size: 14px;
   line-height: 1.25;
+}
+
+.mini-profile-name {
+  min-width: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -6754,8 +6758,9 @@ pre,
 }
 
 .mini-profile-verified {
-  margin-left: 4px;
-  transform: translateY(-1px);
+  margin-left: 0;
+  transform: none;
+  align-self: center;
 }
 
 .owner-mark {
@@ -6765,6 +6770,7 @@ pre,
   width: 18px;
   height: 18px;
   margin-left: 6px;
+  flex-shrink: 0;
   border-radius: 999px;
   border: 1px solid rgba(245, 158, 11, 0.45);
   background: rgba(245, 158, 11, 0.16);
@@ -6775,7 +6781,11 @@ pre,
 }
 
 .mini-profile-owner {
-  transform: translateY(-1px);
+  margin-left: 0;
+  transform: none;
+  align-self: center;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
 }
 
 .mini-profile-identity span {
