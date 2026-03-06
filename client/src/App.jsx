@@ -402,6 +402,8 @@ const FEED_BOOKMARKS_STORAGE_KEY = 'ktk_feed_bookmarks'
 const FEED_EXPLORER_STORAGE_KEY = 'ktk_feed_explorer_v1'
 const DASHBOARD_PREFERENCES_STORAGE_KEY = 'ktk_dashboard_preferences_v1'
 const DASHBOARD_COMMAND_HISTORY_STORAGE_KEY = 'ktk_dashboard_command_history_v1'
+const DASHBOARD_SCRATCHPAD_STORAGE_KEY = 'ktk_dashboard_scratchpad_v1'
+const FEED_COMPOSER_DRAFT_STORAGE_KEY = 'ktk_feed_composer_draft_v1'
 const CHAT_WALLPAPER_STORAGE_KEY = 'ktk_chat_wallpapers'
 const CHAT_ALIAS_STORAGE_KEY = 'ktk_chat_aliases'
 const RECENT_STICKERS_STORAGE_KEY = 'ktk_recent_stickers'
@@ -411,6 +413,25 @@ const UI_PREFERENCES_STORAGE_KEY = 'ktk_ui_preferences_v1'
 const UI_CUSTOM_THEME_PRESETS_STORAGE_KEY = 'ktk_ui_custom_theme_presets_v1'
 const UI_CUSTOM_THEME_PRESET_LIMIT = 24
 const PROFILE_SHOWCASE_STORAGE_KEY = 'ktk_profile_showcase_v1'
+const DASHBOARD_WORKBENCH_MODES = {
+  focus: 'focus',
+  social: 'social',
+  studio: 'studio',
+  ops: 'ops'
+}
+const DASHBOARD_WORKBENCH_MODE_OPTIONS = [
+  { value: DASHBOARD_WORKBENCH_MODES.focus, label: 'Focus', hint: 'chats + priorities' },
+  { value: DASHBOARD_WORKBENCH_MODES.social, label: 'Social', hint: 'feed + trends' },
+  { value: DASHBOARD_WORKBENCH_MODES.studio, label: 'Studio', hint: 'compose + profile' },
+  { value: DASHBOARD_WORKBENCH_MODES.ops, label: 'Ops', hint: 'signals + sync' }
+]
+
+function normalizeDashboardWorkbenchMode(value) {
+  const normalized = String(value || '').trim().toLowerCase()
+  return Object.values(DASHBOARD_WORKBENCH_MODES).includes(normalized)
+    ? normalized
+    : DASHBOARD_WORKBENCH_MODES.focus
+}
 const MEDIA_PANEL_TABS = {
   emoji: 'emoji',
   stickers: 'stickers',
@@ -2009,20 +2030,31 @@ export default function App() {
     if (typeof window === 'undefined') {
       return {
         focusMode: false,
-        autoRefresh: false
+        autoRefresh: false,
+        workbenchMode: DASHBOARD_WORKBENCH_MODES.focus
       }
     }
     try {
       const parsed = JSON.parse(localStorage.getItem(DASHBOARD_PREFERENCES_STORAGE_KEY) || '{}')
       return {
         focusMode: parsed && parsed.focusMode === true,
-        autoRefresh: parsed && parsed.autoRefresh === true
+        autoRefresh: parsed && parsed.autoRefresh === true,
+        workbenchMode: normalizeDashboardWorkbenchMode(parsed && parsed.workbenchMode)
       }
     } catch (err) {
       return {
         focusMode: false,
-        autoRefresh: false
+        autoRefresh: false,
+        workbenchMode: DASHBOARD_WORKBENCH_MODES.focus
       }
+    }
+  })
+  const [dashboardScratchpad, setDashboardScratchpad] = useState(() => {
+    if (typeof window === 'undefined') return ''
+    try {
+      return String(localStorage.getItem(DASHBOARD_SCRATCHPAD_STORAGE_KEY) || '')
+    } catch (err) {
+      return ''
     }
   })
   const [dashboardLastRefreshAt, setDashboardLastRefreshAt] = useState(null)
@@ -2043,9 +2075,27 @@ export default function App() {
       return new Set()
     }
   })
-  const [postText, setPostText] = useState('')
+  const [postText, setPostText] = useState(() => {
+    if (typeof window === 'undefined') return ''
+    try {
+      const parsed = JSON.parse(localStorage.getItem(FEED_COMPOSER_DRAFT_STORAGE_KEY) || '{}')
+      return typeof parsed.text === 'string' ? parsed.text : ''
+    } catch (err) {
+      return ''
+    }
+  })
+  const [feedComposerDraftSavedAt, setFeedComposerDraftSavedAt] = useState(() => {
+    if (typeof window === 'undefined') return null
+    try {
+      const parsed = JSON.parse(localStorage.getItem(FEED_COMPOSER_DRAFT_STORAGE_KEY) || '{}')
+      return parsed && parsed.savedAt ? parsed.savedAt : null
+    } catch (err) {
+      return null
+    }
+  })
   const [postFile, setPostFile] = useState(null)
   const [postPreview, setPostPreview] = useState('')
+  const [feedComposerFocusTick, setFeedComposerFocusTick] = useState(0)
   const [avatarModalOpen, setAvatarModalOpen] = useState(false)
   const [avatarSource, setAvatarSource] = useState('')
   const [avatarZoom, setAvatarZoom] = useState(1)
@@ -2186,6 +2236,7 @@ export default function App() {
   const socketConnectionRef = useRef(socketConnection)
   const chatSearchInputRef = useRef(null)
   const feedQueryInputRef = useRef(null)
+  const feedComposerTextareaRef = useRef(null)
   const composerInputRef = useRef(null)
   const globalPaletteInputRef = useRef(null)
   const globalPaletteSearchSeqRef = useRef(0)
@@ -2820,6 +2871,33 @@ export default function App() {
       hasMedia: Boolean(postFile)
     }
   }, [postText, composerHashtags, postFile])
+  const feedComposerPromptOptions = useMemo(() => {
+    const hottestTag = trendingTags[0] ? trendingTags[0].tag : '#campus'
+    return [
+      { id: 'status', label: 'Статус', text: 'Короткий апдейт дня:\n- что сделал\n- что дальше\n- где нужен фидбек' },
+      { id: 'question', label: 'Вопрос', text: `Есть вопрос к сообществу по теме ${hottestTag}:` },
+      { id: 'showcase', label: 'Showcase', text: 'Показываю свежий прогресс по проекту:\n- идея\n- результат\n- следующий шаг' },
+      { id: 'collab', label: 'Коллаб', text: 'Ищу напарника / команду для задачи:\n- направление\n- стек\n- формат участия' }
+    ]
+  }, [trendingTags])
+  const feedComposerProgress = useMemo(() => {
+    const target = 280
+    const chars = Number(feedComposerInsights.chars || 0)
+    return {
+      target,
+      value: Math.min(100, Math.round((chars / target) * 100)),
+      label: chars === 0
+        ? 'Черновик пуст'
+        : chars <= 120
+          ? 'Короткий импульс'
+          : chars <= target
+            ? 'Комфортная длина'
+            : 'Длинный пост'
+    }
+  }, [feedComposerInsights.chars])
+  const feedComposerDraftLabel = useMemo(() => (
+    feedComposerDraftSavedAt ? `Черновик сохранён в ${formatTime(feedComposerDraftSavedAt)}` : 'Автосохранение ждёт текст'
+  ), [feedComposerDraftSavedAt])
   const feedTimeWindowStartMs = useMemo(() => {
     const now = Date.now()
     if (feedExplorer.timeWindow === FEED_TIME_WINDOWS.day) return now - (24 * 60 * 60 * 1000)
@@ -3211,38 +3289,265 @@ export default function App() {
     callState.status,
     health && health.ok
   ])
+  const dashboardWorkbenchMode = normalizeDashboardWorkbenchMode(dashboardPreferences.workbenchMode)
   const dashboardQuickActions = useMemo(() => {
     return [
       {
-        id: 'unread-chats',
+        id: 'unread',
         title: 'Непрочитанные чаты',
         subtitle: unreadConversationCount > 0 ? `${unreadConversationCount} диалогов` : 'Чисто',
         icon: '💬',
-        accent: unreadConversationCount > 0 ? 'warn' : 'ok'
+        accent: unreadConversationCount > 0 ? 'warn' : 'ok',
+        action: 'unread'
       },
       {
         id: 'hot-feed',
         title: 'Горячая лента',
         subtitle: hotFeedPosts[0] ? `${hotFeedPosts.length} постов в радаре` : 'Пока тихо',
         icon: '🔥',
-        accent: hotFeedPosts[0] ? 'hot' : 'neutral'
+        accent: hotFeedPosts[0] ? 'hot' : 'neutral',
+        action: 'feed-hot'
+      },
+      {
+        id: 'compose',
+        title: 'Быстрый пост',
+        subtitle: String(postText || '').trim() ? 'Есть черновик' : 'Открыть composer',
+        icon: '✍️',
+        accent: String(postText || '').trim() ? 'accent' : 'neutral',
+        action: 'compose'
       },
       {
         id: 'resume-chat',
         title: 'Вернуться в чат',
         subtitle: activeConversation ? getConversationDisplayName(activeConversation, chatAliasByConversation) : 'Выбери диалог',
         icon: '🧭',
-        accent: activeConversation ? 'accent' : 'neutral'
+        accent: activeConversation ? 'accent' : 'neutral',
+        action: 'resume-chat'
       },
       {
         id: 'profile-lab',
         title: 'Профиль',
         subtitle: `${profileEditorScore}% готовности`,
         icon: '🛠️',
-        accent: profileEditorScore >= 80 ? 'ok' : 'neutral'
+        accent: profileEditorScore >= 80 ? 'ok' : 'neutral',
+        action: 'profile'
+      },
+      {
+        id: 'refresh',
+        title: 'Синхронизировать',
+        subtitle: dashboardLastRefreshAt ? `Последнее: ${formatTime(dashboardLastRefreshAt)}` : 'Обновить snapshot',
+        icon: '↻',
+        accent: dashboardRefreshLoading ? 'warn' : 'neutral',
+        action: 'refresh'
       }
     ]
-  }, [unreadConversationCount, hotFeedPosts, profileEditorScore, activeConversation, chatAliasByConversation])
+  }, [
+    unreadConversationCount,
+    hotFeedPosts,
+    profileEditorScore,
+    activeConversation,
+    chatAliasByConversation,
+    postText,
+    dashboardLastRefreshAt,
+    dashboardRefreshLoading
+  ])
+  const dashboardWorkbenchSummary = useMemo(() => {
+    if (dashboardWorkbenchMode === DASHBOARD_WORKBENCH_MODES.social) {
+      return {
+        title: 'Social radar',
+        description: 'Следи за горячей лентой, трендами и вовлечением без лишнего шума.',
+        badge: hotFeedPosts[0] ? `${hotFeedPosts.length} hot posts` : 'quiet stream'
+      }
+    }
+    if (dashboardWorkbenchMode === DASHBOARD_WORKBENCH_MODES.studio) {
+      return {
+        title: 'Studio lane',
+        description: 'Собирай публикации, докручивай профиль и веди заметки в одном месте.',
+        badge: String(postText || '').trim() ? 'draft in progress' : 'ready to publish'
+      }
+    }
+    if (dashboardWorkbenchMode === DASHBOARD_WORKBENCH_MODES.ops) {
+      return {
+        title: 'Ops board',
+        description: 'Контролируй realtime, push и health, пока сервис держится в тонусе.',
+        badge: dashboardSystemAlerts.length > 0 ? `${dashboardSystemAlerts.length} alerts` : 'all systems nominal'
+      }
+    }
+    return {
+      title: 'Focus lane',
+      description: 'Быстрый доступ к приоритетным чатам, свежим задачам и следующему шагу.',
+      badge: unreadConversationCount > 0 ? `${unreadConversationCount} chats need attention` : 'queue is under control'
+    }
+  }, [dashboardWorkbenchMode, hotFeedPosts, postText, dashboardSystemAlerts.length, unreadConversationCount])
+  const dashboardMissionSignals = useMemo(() => ([
+    {
+      id: 'workspace',
+      label: 'Workspace score',
+      value: `${dashboardWorkspaceScore}%`
+    },
+    {
+      id: 'unread',
+      label: 'Unread pressure',
+      value: unreadMessagesCount > 0 ? `${unreadMessagesCount} msgs` : 'clear'
+    },
+    {
+      id: 'feed',
+      label: 'Fresh stream',
+      value: feedDigest.freshCount > 0 ? `${feedDigest.freshCount} new` : 'steady'
+    },
+    {
+      id: 'profile',
+      label: 'Profile lab',
+      value: `${profileEditorScore}%`
+    }
+  ]), [dashboardWorkspaceScore, unreadMessagesCount, feedDigest.freshCount, profileEditorScore])
+  const dashboardScratchpadTemplates = useMemo(() => {
+    const hottestTag = trendingTags[0] ? trendingTags[0].tag : '#campus'
+    if (dashboardWorkbenchMode === DASHBOARD_WORKBENCH_MODES.social) {
+      return [
+        `Поймать тему ${hottestTag}`,
+        'Кого отметить в новом посте?',
+        'Что обсудить с сообществом сегодня?'
+      ]
+    }
+    if (dashboardWorkbenchMode === DASHBOARD_WORKBENCH_MODES.studio) {
+      return [
+        'Идея поста: показать прогресс по проекту',
+        'Профиль: что ещё не заполнено?',
+        'Что вынести в Showcase headline?'
+      ]
+    }
+    if (dashboardWorkbenchMode === DASHBOARD_WORKBENCH_MODES.ops) {
+      return [
+        'Проверить realtime и push',
+        'Сверить health + presence snapshot',
+        'Есть ли alerts, которые нужно закрыть?'
+      ]
+    }
+    return [
+      'Кому ответить в первую очередь?',
+      'Какой диалог требует follow-up?',
+      `Нужен ли быстрый заход в ${hottestTag}?`
+    ]
+  }, [dashboardWorkbenchMode, trendingTags])
+  const dashboardWorkbenchCards = useMemo(() => {
+    const hottestTag = trendingTags[0] || null
+    const topConversation = dashboardTopConversations[0] || null
+    if (dashboardWorkbenchMode === DASHBOARD_WORKBENCH_MODES.social) {
+      return [
+        {
+          id: 'social-hot',
+          eyebrow: 'Momentum',
+          title: hotFeedPosts[0] ? `Открыть hype: ${hotFeedPosts[0].post.author.displayName || hotFeedPosts[0].post.author.username}` : 'Разогреть ленту',
+          text: hotFeedPosts[0] ? `${hotFeedPosts[0].score} очков вовлечения` : 'Сейчас можно зайти в общую ленту и задать темп.',
+          action: 'feed-hot'
+        },
+        {
+          id: 'social-tag',
+          eyebrow: 'Trend',
+          title: hottestTag ? hottestTag.tag : 'Тренд ещё не сформирован',
+          text: hottestTag ? `${hottestTag.count} упоминаний в постах` : 'Подожди пару публикаций или создай тему сам.',
+          action: hottestTag ? 'tag' : 'compose',
+          payload: hottestTag ? { tag: hottestTag.tag } : { template: 'Есть идея для новой темы в ленте:' }
+        },
+        {
+          id: 'social-bookmarks',
+          eyebrow: 'Library',
+          title: 'Поднять сохранённые посты',
+          text: bookmarkedPostIds.size > 0 ? `${bookmarkedPostIds.size} материалов уже в закладках` : 'Сохрани полезные посты для быстрого возврата.',
+          action: 'bookmarks'
+        }
+      ]
+    }
+    if (dashboardWorkbenchMode === DASHBOARD_WORKBENCH_MODES.studio) {
+      return [
+        {
+          id: 'studio-compose',
+          eyebrow: 'Composer',
+          title: String(postText || '').trim() ? 'Продолжить черновик поста' : 'Открыть быстрый composer',
+          text: String(postText || '').trim() ? `${String(postText || '').trim().length} символов уже набрано` : 'Собери короткий апдейт или витринный пост.',
+          action: 'compose'
+        },
+        {
+          id: 'studio-profile',
+          eyebrow: 'Profile lab',
+          title: 'Прокачать публичный образ',
+          text: profileEditorPendingChecklist[0] ? profileEditorPendingChecklist[0].label : 'Профиль выглядит завершённым.',
+          action: 'profile'
+        },
+        {
+          id: 'studio-mine',
+          eyebrow: 'Archive',
+          title: 'Разобрать свои публикации',
+          text: feedMetrics.mine > 0 ? `${feedMetrics.mine} постов уже в архиве` : 'Пока нет своих постов. Самое время начать.',
+          action: 'mine-posts'
+        }
+      ]
+    }
+    if (dashboardWorkbenchMode === DASHBOARD_WORKBENCH_MODES.ops) {
+      return [
+        {
+          id: 'ops-health',
+          eyebrow: 'Health',
+          title: health && health.ok ? 'Сервис отвечает стабильно' : 'Проверить состояние сервера',
+          text: health && health.ok ? 'Можно обновить snapshot и убедиться, что всё синхронизировано.' : 'Есть смысл вручную обновить данные прямо сейчас.',
+          action: 'refresh'
+        },
+        {
+          id: 'ops-push',
+          eyebrow: 'Notifications',
+          title: pushState.enabled ? 'Push активен' : 'Синхронизировать push',
+          text: pushState.enabled ? 'Уведомления готовы к работе.' : (pushState.error || 'Проверь push-состояние и разрешения.'),
+          action: 'push'
+        },
+        {
+          id: 'ops-chat',
+          eyebrow: 'Queue',
+          title: topConversation ? getConversationDisplayName(topConversation, chatAliasByConversation) : 'Открыть список диалогов',
+          text: topConversation ? (topConversation.lastMessage || 'Перейти к приоритетному чату') : 'Нет активного диалога для быстрого возврата.',
+          action: topConversation ? 'resume-chat' : 'unread'
+        }
+      ]
+    }
+    return [
+      {
+        id: 'focus-unread',
+        eyebrow: 'Inbox',
+        title: unreadConversationCount > 0 ? 'Разобрать непрочитанные диалоги' : 'Диалоги под контролем',
+        text: unreadConversationCount > 0 ? `${unreadConversationCount} чатов ждут ответа` : 'Можно переключиться на ленту или публикацию.',
+        action: 'unread'
+      },
+      {
+        id: 'focus-drafts',
+        eyebrow: 'Drafts',
+        title: dashboardDraftQueue.length > 0 ? 'Вернуться к черновикам' : 'Новых черновиков нет',
+        text: dashboardDraftQueue.length > 0 ? `${dashboardDraftQueue.length} разговоров с набранным текстом` : 'Сейчас можно закрыть другие хвосты.',
+        action: dashboardDraftQueue.length > 0 ? 'drafts' : 'compose'
+      },
+      {
+        id: 'focus-chat',
+        eyebrow: 'Next move',
+        title: topConversation ? getConversationDisplayName(topConversation, chatAliasByConversation) : 'Открыть активный чат',
+        text: topConversation ? (topConversation.lastMessage || 'Открыть диалог') : 'Выбери разговор и продолжи поток.',
+        action: topConversation ? 'resume-chat' : 'chats'
+      }
+    ]
+  }, [
+    dashboardWorkbenchMode,
+    trendingTags,
+    hotFeedPosts,
+    bookmarkedPostIds.size,
+    postText,
+    profileEditorPendingChecklist,
+    feedMetrics.mine,
+    health && health.ok,
+    pushState.enabled,
+    pushState.error,
+    dashboardDraftQueue.length,
+    unreadConversationCount,
+    dashboardTopConversations,
+    chatAliasByConversation
+  ])
   const dashboardSystemAlerts = useMemo(() => {
     const items = []
     if (socketConnection !== 'connected') {
@@ -4799,12 +5104,13 @@ export default function App() {
     try {
       localStorage.setItem(DASHBOARD_PREFERENCES_STORAGE_KEY, JSON.stringify({
         focusMode: dashboardFocusMode,
-        autoRefresh: dashboardAutoRefresh
+        autoRefresh: dashboardAutoRefresh,
+        workbenchMode: dashboardWorkbenchMode
       }))
     } catch (err) {
       // ignore storage errors
     }
-  }, [dashboardFocusMode, dashboardAutoRefresh])
+  }, [dashboardFocusMode, dashboardAutoRefresh, dashboardWorkbenchMode])
 
   useEffect(() => {
     try {
@@ -4816,6 +5122,47 @@ export default function App() {
       // ignore storage errors
     }
   }, [dashboardCommandHistory])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(DASHBOARD_SCRATCHPAD_STORAGE_KEY, dashboardScratchpad)
+    } catch (err) {
+      // ignore storage errors
+    }
+  }, [dashboardScratchpad])
+
+  useEffect(() => {
+    try {
+      const trimmed = String(postText || '').trim()
+      if (!trimmed) {
+        localStorage.removeItem(FEED_COMPOSER_DRAFT_STORAGE_KEY)
+        if (feedComposerDraftSavedAt !== null) {
+          setFeedComposerDraftSavedAt(null)
+        }
+        return
+      }
+      const nextSavedAt = Date.now()
+      localStorage.setItem(FEED_COMPOSER_DRAFT_STORAGE_KEY, JSON.stringify({
+        text: postText,
+        savedAt: nextSavedAt
+      }))
+      setFeedComposerDraftSavedAt(nextSavedAt)
+    } catch (err) {
+      // ignore storage errors
+    }
+  }, [postText])
+
+  useEffect(() => {
+    if (view !== 'feed' || feedComposerFocusTick === 0) return
+    const frame = window.requestAnimationFrame(() => {
+      const textarea = feedComposerTextareaRef.current
+      if (!textarea) return
+      textarea.focus()
+      const caret = textarea.value.length
+      textarea.setSelectionRange(caret, caret)
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [view, feedComposerFocusTick])
 
   useEffect(() => {
     try {
@@ -7500,6 +7847,102 @@ export default function App() {
     }
   }
 
+  const focusFeedComposer = () => {
+    setView('feed')
+    setFeedComposerFocusTick((prev) => prev + 1)
+  }
+
+  const clearFeedComposerDraft = () => {
+    setPostText('')
+    setPostFile(null)
+    setPostPreview('')
+    setFeedComposerDraftSavedAt(null)
+    try {
+      localStorage.removeItem(FEED_COMPOSER_DRAFT_STORAGE_KEY)
+    } catch (err) {
+      // ignore storage errors
+    }
+  }
+
+  const applyFeedComposerPrompt = (rawText, { replace = false } = {}) => {
+    const nextText = String(rawText || '').trim()
+    if (!nextText) {
+      focusFeedComposer()
+      return
+    }
+    setView('feed')
+    setPostText((prev) => {
+      const current = String(prev || '')
+      if (replace || !current.trim()) return nextText
+      if (current.includes(nextText)) return current
+      return `${current.trimEnd()}\n\n${nextText}`.trim()
+    })
+    setFeedComposerFocusTick((prev) => prev + 1)
+  }
+
+  const appendDashboardScratchpadTemplate = (rawText) => {
+    const nextText = String(rawText || '').trim()
+    if (!nextText) return
+    setDashboardScratchpad((prev) => {
+      const current = String(prev || '').trim()
+      if (!current) return nextText
+      if (current.includes(nextText)) return prev
+      return `${prev.trimEnd()}\n${nextText}`.trim()
+    })
+  }
+
+  const updateDashboardWorkbenchMode = (mode) => {
+    updateDashboardPreferences({ workbenchMode: normalizeDashboardWorkbenchMode(mode) })
+  }
+
+  const runDashboardWorkbenchAction = (actionId, payload = null) => {
+    if (actionId === 'unread' || actionId === 'drafts' || actionId === 'feed-hot' || actionId === 'profile' || actionId === 'trend') {
+      runDashboardFocusAction(actionId)
+      return
+    }
+    if (actionId === 'compose') {
+      applyFeedComposerPrompt(payload && payload.template ? payload.template : '', { replace: false })
+      return
+    }
+    if (actionId === 'resume-chat') {
+      if (activeConversation) {
+        openConversationFromDashboard(activeConversation)
+      } else {
+        setView('chats')
+        setChatMobilePane('list')
+      }
+      return
+    }
+    if (actionId === 'refresh') {
+      refreshWorkspaceSnapshot()
+      return
+    }
+    if (actionId === 'push') {
+      syncPushState({ keepError: true }).catch(() => {})
+      return
+    }
+    if (actionId === 'bookmarks') {
+      openFeedFocus({ filter: FEED_FILTERS.bookmarks })
+      return
+    }
+    if (actionId === 'mine-posts') {
+      openFeedFocus({ filter: FEED_FILTERS.mine, sortMode: FEED_SORT_MODES.latest })
+      return
+    }
+    if (actionId === 'tag' && payload && payload.tag) {
+      openFeedFocus({ filter: FEED_FILTERS.all, sortMode: FEED_SORT_MODES.smart, tag: payload.tag })
+      return
+    }
+    if (actionId === 'settings') {
+      setView('settings')
+      return
+    }
+    if (actionId === 'chats') {
+      setView('chats')
+      setChatMobilePane('list')
+    }
+  }
+
   const runDashboardFocusAction = (actionId) => {
     if (actionId === 'drafts') {
       setView('chats')
@@ -7591,7 +8034,8 @@ export default function App() {
     setDashboardPreferences((prev) => ({
       ...prev,
       ...(patch.focusMode !== undefined ? { focusMode: patch.focusMode === true } : {}),
-      ...(patch.autoRefresh !== undefined ? { autoRefresh: patch.autoRefresh === true } : {})
+      ...(patch.autoRefresh !== undefined ? { autoRefresh: patch.autoRefresh === true } : {}),
+      ...(patch.workbenchMode !== undefined ? { workbenchMode: normalizeDashboardWorkbenchMode(patch.workbenchMode) } : {})
     }))
   }
 
@@ -7633,6 +8077,14 @@ export default function App() {
       return
     }
 
+    if (value.startsWith('mode:')) {
+      const nextMode = normalizeDashboardWorkbenchMode(value.slice(5))
+      updateDashboardWorkbenchMode(nextMode)
+      setStatus({ type: 'success', message: `Dashboard lane: ${nextMode}` })
+      setDashboardCommandInput('')
+      return
+    }
+
     if (value === 'unread' || value === 'непрочитанные' || value === 'непроч') {
       runDashboardFocusAction('unread')
       setDashboardCommandInput('')
@@ -7670,6 +8122,11 @@ export default function App() {
     }
     if (value === 'feed' || value === 'лента') {
       setView('feed')
+      setDashboardCommandInput('')
+      return
+    }
+    if (value === 'compose' || value === 'post' || value === 'publish' || value === 'пост') {
+      runDashboardWorkbenchAction('compose')
       setDashboardCommandInput('')
       return
     }
@@ -9548,6 +10005,12 @@ export default function App() {
       setPostText('')
       setPostFile(null)
       setPostPreview('')
+      setFeedComposerDraftSavedAt(null)
+      try {
+        localStorage.removeItem(FEED_COMPOSER_DRAFT_STORAGE_KEY)
+      } catch (storageErr) {
+        // ignore storage errors
+      }
       setStatus({ type: 'success', message: 'Пост опубликован.' })
     } catch (err) {
       setStatus({ type: 'error', message: err.message })
@@ -10215,11 +10678,120 @@ export default function App() {
               </div>
             </section>
 
+            <section className={`dashboard-mission-board mode-${dashboardWorkbenchMode}`.trim()}>
+              <article className="dashboard-mission-panel">
+                <div className="dashboard-card-head">
+                  <div>
+                    <strong>Mission Control</strong>
+                    <span>{dashboardWorkbenchSummary.description}</span>
+                  </div>
+                  <span className="dashboard-mission-badge">{dashboardWorkbenchSummary.badge}</span>
+                </div>
+                <div className="dashboard-mission-hero">
+                  <div className="dashboard-mission-score">
+                    <strong>{dashboardWorkspaceScore}</strong>
+                    <span>workspace score</span>
+                  </div>
+                  <div className="dashboard-mission-copy">
+                    <span className="dashboard-mission-kicker">{dashboardWorkbenchSummary.title}</span>
+                    <h3>Выбери рабочую полосу и держи весь стек под рукой.</h3>
+                    <div className="dashboard-workbench-switch" role="tablist" aria-label="Dashboard workbench mode">
+                      {DASHBOARD_WORKBENCH_MODE_OPTIONS.map((mode) => (
+                        <button
+                          key={mode.value}
+                          type="button"
+                          className={dashboardWorkbenchMode === mode.value ? 'active' : ''}
+                          onClick={() => updateDashboardWorkbenchMode(mode.value)}
+                        >
+                          <strong>{mode.label}</strong>
+                          <small>{mode.hint}</small>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                <div className="dashboard-mission-signals">
+                  {dashboardMissionSignals.map((item) => (
+                    <article key={item.id}>
+                      <span>{item.label}</span>
+                      <strong>{item.value}</strong>
+                    </article>
+                  ))}
+                </div>
+                <div className="dashboard-launchpad-grid">
+                  {dashboardQuickActions.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      className={`dashboard-launchpad-card accent-${item.accent}`.trim()}
+                      onClick={() => runDashboardWorkbenchAction(item.action)}
+                    >
+                      <span className="dashboard-launchpad-icon">{item.icon}</span>
+                      <strong>{item.title}</strong>
+                      <small>{item.subtitle}</small>
+                    </button>
+                  ))}
+                </div>
+              </article>
+              <article className="dashboard-scratchpad-panel">
+                <div className="dashboard-card-head">
+                  <div>
+                    <strong>Scratchpad</strong>
+                    <span>локальные заметки, быстрые формулировки и подготовка к посту</span>
+                  </div>
+                  <span className="dashboard-scratchpad-meta">{String(dashboardScratchpad || '').trim().length} chars</span>
+                </div>
+                <textarea
+                  value={dashboardScratchpad}
+                  onChange={(event) => setDashboardScratchpad(event.target.value)}
+                  placeholder="Запиши следующий шаг, тезисы для поста или что нужно добить в профиле..."
+                />
+                <div className="dashboard-scratchpad-templates">
+                  {dashboardScratchpadTemplates.map((item) => (
+                    <button
+                      key={`${dashboardWorkbenchMode}-${item}`}
+                      type="button"
+                      className="ghost"
+                      onClick={() => appendDashboardScratchpadTemplate(item)}
+                    >
+                      {item}
+                    </button>
+                  ))}
+                </div>
+                <div className="dashboard-scratchpad-actions">
+                  <button
+                    type="button"
+                    className="primary"
+                    onClick={() => runDashboardWorkbenchAction('compose', { template: dashboardScratchpad })}
+                  >
+                    В composer
+                  </button>
+                  <button type="button" className="ghost" onClick={() => setDashboardScratchpad('')}>
+                    Очистить
+                  </button>
+                </div>
+                <div className="dashboard-workbench-cards">
+                  {dashboardWorkbenchCards.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      className="dashboard-workbench-card"
+                      onClick={() => runDashboardWorkbenchAction(item.action, item.payload)}
+                    >
+                      <span>{item.eyebrow}</span>
+                      <strong>{item.title}</strong>
+                      <small>{item.text}</small>
+                    </button>
+                  ))}
+                </div>
+              </article>
+            </section>
+
             <section className="dashboard-command-deck">
               <div className="dashboard-card-head">
                 <div>
                   <strong>Командная строка</strong>
-                  <span>команды: unread, drafts, hot, mine, bookmarks, profile, chats, feed, refresh, push, #тег, @автор</span>
+                  <span>команды: unread, drafts, hot, compose, mine, bookmarks, profile, chats, feed, refresh, push, mode:focus, #тег, @автор</span>
                 </div>
               </div>
               <div className="dashboard-command-row">
@@ -10259,34 +10831,36 @@ export default function App() {
               <article className="dashboard-functional-card">
                 <div className="dashboard-card-head">
                   <div>
-                    <strong>Быстрые действия</strong>
-                    <span>только полезные переходы</span>
+                    <strong>Next moves</strong>
+                    <span>что стоит сделать прямо сейчас</span>
                   </div>
                 </div>
-                <div className="dashboard-functional-actions">
-                  <button type="button" className="dashboard-functional-action-tile" onClick={() => runDashboardFocusAction('unread')}>
-                    <strong>Непрочитанные</strong>
-                    <span>{unreadConversationCount} чатов</span>
+                {dashboardFocusQueue.length === 0 ? (
+                  <div className="dashboard-functional-note">Очередь спокойная. Можно переключиться на публикацию, тренды или тонкую настройку профиля.</div>
+                ) : (
+                  <div className="dashboard-functional-list">
+                    {dashboardFocusQueue.map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        className="dashboard-functional-row-main"
+                        onClick={() => runDashboardWorkbenchAction(item.action)}
+                      >
+                        <strong>{item.title}</strong>
+                        <span>{item.text}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <div className="dashboard-shortcut-row">
+                  <button type="button" className="ghost" onClick={() => runDashboardWorkbenchAction('compose')}>
+                    Новый пост
                   </button>
-                  <button type="button" className="dashboard-functional-action-tile" onClick={() => runDashboardFocusAction('drafts')}>
-                    <strong>Черновики</strong>
-                    <span>{dashboardDraftQueue.length} чатов</span>
+                  <button type="button" className="ghost" onClick={() => runDashboardWorkbenchAction('bookmarks')}>
+                    Закладки
                   </button>
-                  <button type="button" className="dashboard-functional-action-tile" onClick={() => runDashboardFocusAction('feed-hot')}>
-                    <strong>Горячая лента</strong>
-                    <span>{hotFeedPosts.length} постов</span>
-                  </button>
-                  <button type="button" className="dashboard-functional-action-tile" onClick={() => openFeedFocus({ filter: FEED_FILTERS.bookmarks })}>
-                    <strong>Закладки</strong>
-                    <span>{bookmarkedPostIds.size} сохранено</span>
-                  </button>
-                  <button type="button" className="dashboard-functional-action-tile" onClick={() => setView('profile')}>
-                    <strong>Профиль</strong>
-                    <span>настройки аккаунта</span>
-                  </button>
-                  <button type="button" className="dashboard-functional-action-tile" onClick={() => setView('chats')}>
-                    <strong>Чаты</strong>
-                    <span>{conversations.length} диалогов</span>
+                  <button type="button" className="ghost" onClick={() => runDashboardWorkbenchAction('settings')}>
+                    Настройки
                   </button>
                 </div>
               </article>
@@ -11983,12 +12557,42 @@ export default function App() {
                   <span>@{user.username}</span>
                 </div>
               </div>
+              <div className="feed-composer-draft-row">
+                <span className="feed-composer-draft-state">{feedComposerDraftLabel}</span>
+                {(postText.trim() || postFile) && (
+                  <button type="button" className="ghost" onClick={clearFeedComposerDraft}>
+                    Очистить черновик
+                  </button>
+                )}
+              </div>
               <textarea
+                ref={feedComposerTextareaRef}
                 rows={3}
                 value={postText}
                 onChange={(event) => setPostText(event.target.value)}
                 placeholder="Что нового в колледже?"
               />
+              <div className="feed-composer-prompt-row">
+                {feedComposerPromptOptions.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className="feed-composer-prompt"
+                    onClick={() => applyFeedComposerPrompt(item.text)}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+              <div className="feed-composer-progress">
+                <div className="feed-composer-progress-copy">
+                  <strong>{feedComposerProgress.label}</strong>
+                  <span>целевой ритм: до {feedComposerProgress.target} символов</span>
+                </div>
+                <div className="feed-composer-progress-track" aria-hidden="true">
+                  <span style={{ width: `${feedComposerProgress.value}%` }}></span>
+                </div>
+              </div>
               <div className="feed-composer-insights">
                 <div className="feed-composer-metrics">
                   <span><strong>{feedComposerInsights.chars}</strong> символов</span>

@@ -5338,6 +5338,313 @@ pre,
   background: rgba(244, 63, 94, 0.08);
 }
 
+.dashboard-mission-board {
+  display: grid;
+  grid-template-columns: minmax(0, 1.65fr) minmax(300px, 1fr);
+  gap: 12px;
+}
+
+.dashboard-mission-panel,
+.dashboard-scratchpad-panel {
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  padding: 16px;
+  display: grid;
+  gap: 14px;
+  box-shadow: 0 18px 36px rgba(0, 0, 0, 0.18);
+}
+
+.dashboard-mission-panel {
+  background:
+    radial-gradient(120% 140% at 0% 0%, rgba(var(--accent-rgb), 0.18), transparent 58%),
+    radial-gradient(100% 100% at 100% 0%, rgba(var(--accent-2-rgb), 0.16), transparent 52%),
+    linear-gradient(160deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.01)),
+    var(--panel-gradient);
+}
+
+.dashboard-mission-board.mode-social .dashboard-mission-panel {
+  background:
+    radial-gradient(120% 140% at 0% 0%, rgba(244, 114, 182, 0.2), transparent 58%),
+    radial-gradient(100% 100% at 100% 0%, rgba(59, 130, 246, 0.18), transparent 52%),
+    linear-gradient(160deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.01)),
+    var(--panel-gradient);
+}
+
+.dashboard-mission-board.mode-studio .dashboard-mission-panel {
+  background:
+    radial-gradient(120% 140% at 0% 0%, rgba(16, 185, 129, 0.2), transparent 58%),
+    radial-gradient(100% 100% at 100% 0%, rgba(245, 158, 11, 0.16), transparent 52%),
+    linear-gradient(160deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.01)),
+    var(--panel-gradient);
+}
+
+.dashboard-mission-board.mode-ops .dashboard-mission-panel {
+  background:
+    radial-gradient(120% 140% at 0% 0%, rgba(56, 189, 248, 0.22), transparent 58%),
+    radial-gradient(100% 100% at 100% 0%, rgba(96, 165, 250, 0.16), transparent 52%),
+    linear-gradient(160deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.01)),
+    var(--panel-gradient);
+}
+
+.dashboard-scratchpad-panel {
+  background:
+    linear-gradient(165deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.015)),
+    var(--panel-gradient);
+}
+
+.dashboard-mission-badge,
+.dashboard-scratchpad-meta {
+  border: 1px solid rgba(var(--accent-rgb), 0.26);
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text);
+  background: rgba(var(--accent-rgb), 0.1);
+}
+
+.dashboard-mission-hero {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 16px;
+  align-items: center;
+}
+
+.dashboard-mission-score {
+  width: 120px;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  border: 1px solid rgba(var(--accent-rgb), 0.28);
+  background:
+    radial-gradient(circle at 50% 35%, rgba(255, 255, 255, 0.2), transparent 56%),
+    rgba(9, 12, 21, 0.42);
+  display: grid;
+  place-items: center;
+  text-align: center;
+  box-shadow: inset 0 0 0 10px rgba(255, 255, 255, 0.025);
+}
+
+.dashboard-mission-score strong {
+  display: block;
+  font-size: 34px;
+  line-height: 1;
+}
+
+.dashboard-mission-score span {
+  display: block;
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.35px;
+}
+
+.dashboard-mission-copy {
+  display: grid;
+  gap: 10px;
+}
+
+.dashboard-mission-kicker {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.32px;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.dashboard-mission-copy h3 {
+  margin: 0;
+  font-size: 26px;
+  line-height: 1.05;
+}
+
+.dashboard-workbench-switch {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.dashboard-workbench-switch button {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  background: rgba(9, 12, 21, 0.28);
+  color: var(--text);
+  padding: 10px 12px;
+  text-align: left;
+  display: grid;
+  gap: 3px;
+  cursor: pointer;
+  transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease;
+}
+
+.dashboard-workbench-switch button:hover,
+.dashboard-workbench-switch button.active {
+  transform: translateY(-1px);
+  border-color: rgba(var(--accent-rgb), 0.38);
+  background: rgba(var(--accent-rgb), 0.14);
+}
+
+.dashboard-workbench-switch button strong {
+  font-size: 13px;
+}
+
+.dashboard-workbench-switch button small {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.dashboard-mission-signals {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.dashboard-mission-signals article {
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 16px;
+  background: rgba(9, 12, 21, 0.22);
+  padding: 11px 12px;
+  display: grid;
+  gap: 4px;
+}
+
+.dashboard-mission-signals span {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.dashboard-mission-signals strong {
+  font-size: 16px;
+}
+
+.dashboard-launchpad-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.dashboard-launchpad-card {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 18px;
+  background: rgba(9, 12, 21, 0.28);
+  color: var(--text);
+  min-height: 112px;
+  padding: 12px;
+  text-align: left;
+  display: grid;
+  gap: 6px;
+  align-content: start;
+  cursor: pointer;
+  transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease;
+}
+
+.dashboard-launchpad-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(var(--accent-rgb), 0.34);
+  background: rgba(var(--accent-rgb), 0.12);
+}
+
+.dashboard-launchpad-card.accent-hot {
+  border-color: rgba(249, 115, 22, 0.3);
+  background: rgba(249, 115, 22, 0.1);
+}
+
+.dashboard-launchpad-card.accent-warn {
+  border-color: rgba(245, 158, 11, 0.3);
+  background: rgba(245, 158, 11, 0.09);
+}
+
+.dashboard-launchpad-card.accent-ok {
+  border-color: rgba(34, 197, 94, 0.28);
+  background: rgba(34, 197, 94, 0.08);
+}
+
+.dashboard-launchpad-card.accent-accent {
+  border-color: rgba(var(--accent-rgb), 0.34);
+  background: rgba(var(--accent-rgb), 0.12);
+}
+
+.dashboard-launchpad-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 18px;
+}
+
+.dashboard-launchpad-card strong {
+  font-size: 14px;
+}
+
+.dashboard-launchpad-card small {
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--muted);
+}
+
+.dashboard-scratchpad-panel textarea {
+  min-height: 148px;
+  resize: vertical;
+}
+
+.dashboard-scratchpad-templates,
+.dashboard-workbench-cards {
+  display: grid;
+  gap: 8px;
+}
+
+.dashboard-scratchpad-templates {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.dashboard-scratchpad-templates .ghost {
+  text-align: left;
+  padding: 9px 10px;
+  min-height: 52px;
+}
+
+.dashboard-scratchpad-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.dashboard-workbench-card {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  background: rgba(9, 12, 21, 0.22);
+  color: var(--text);
+  text-align: left;
+  padding: 12px;
+  display: grid;
+  gap: 4px;
+  cursor: pointer;
+  transition: transform 0.16s ease, border-color 0.16s ease;
+}
+
+.dashboard-workbench-card:hover {
+  transform: translateY(-1px);
+  border-color: rgba(var(--accent-rgb), 0.32);
+}
+
+.dashboard-workbench-card span {
+  font-size: 10px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.28px;
+}
+
+.dashboard-workbench-card strong {
+  font-size: 14px;
+}
+
+.dashboard-workbench-card small {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
 .dashboard-command-deck {
   border: 1px solid var(--line);
   border-radius: 16px;
@@ -5574,6 +5881,10 @@ pre,
   .dashboard-functional-card {
     grid-column: span 12;
   }
+
+  .dashboard-mission-board {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 760px) {
@@ -5609,6 +5920,22 @@ pre,
   .dashboard-system-grid {
     grid-template-columns: 1fr;
   }
+
+  .dashboard-mission-hero,
+  .dashboard-workbench-switch,
+  .dashboard-mission-signals,
+  .dashboard-launchpad-grid,
+  .dashboard-scratchpad-templates {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-mission-score {
+    width: 96px;
+  }
+
+  .dashboard-mission-copy h3 {
+    font-size: 22px;
+  }
 }
 
 .profile-page {
@@ -5631,6 +5958,78 @@ pre,
     linear-gradient(160deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.015)),
     var(--card);
   box-shadow: 0 12px 24px rgba(0, 0, 0, 0.2);
+}
+
+.feed-composer-draft-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.feed-composer-draft-state {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.feed-composer-prompt-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.feed-composer-prompt {
+  border: 1px solid rgba(var(--accent-rgb), 0.22);
+  border-radius: 999px;
+  background: rgba(var(--accent-rgb), 0.08);
+  color: var(--text);
+  padding: 7px 11px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease;
+}
+
+.feed-composer-prompt:hover {
+  transform: translateY(-1px);
+  border-color: rgba(var(--accent-rgb), 0.36);
+  background: rgba(var(--accent-rgb), 0.14);
+}
+
+.feed-composer-progress {
+  display: grid;
+  gap: 8px;
+}
+
+.feed-composer-progress-copy {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.feed-composer-progress-copy strong {
+  font-size: 13px;
+}
+
+.feed-composer-progress-copy span {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.feed-composer-progress-track {
+  width: 100%;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.feed-composer-progress-track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgba(var(--accent-rgb), 0.92), rgba(var(--accent-2-rgb), 0.92));
 }
 
 .feed-toolbox {
