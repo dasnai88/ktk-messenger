@@ -85,6 +85,7 @@ class AuthController extends ChangeNotifier {
     String? bio,
     String? username,
     String? role,
+    bool? showRole,
     String? themeColor,
   }) async {
     final payload = <String, dynamic>{};
@@ -92,6 +93,7 @@ class AuthController extends ChangeNotifier {
     if (bio != null) payload['bio'] = bio;
     if (username != null) payload['username'] = username;
     if (role != null) payload['role'] = role;
+    if (showRole != null) payload['showRole'] = showRole;
     if (themeColor != null) payload['themeColor'] = themeColor;
     final data = await _api.patchJson('/me', payload);
     user = User.fromJson(data['user'] as Map<String, dynamic>);

@@ -1013,6 +1013,7 @@ function mapUser(row) {
     username: row.username,
     role: primaryRole,
     roles,
+    showRole: row.show_role !== false,
     displayName: row.display_name,
     bio: row.bio,
     statusText: row.status_text || '',
@@ -1571,6 +1572,7 @@ function mapOtherUser(row) {
     username: row.other_username,
     displayName: row.other_display_name,
     role: row.other_role,
+    showRole: row.other_show_role !== false,
     avatarUrl: row.other_avatar_url,
     isVerified: row.other_is_verified === true,
     statusText: row.other_status_text || '',
@@ -1980,6 +1982,7 @@ function mapPost(row) {
       id: row.author_id,
       username: row.author_username,
       displayName: row.author_display_name,
+      showRole: row.author_show_role !== false,
       avatarUrl: row.author_avatar_url
     }
   }
@@ -1989,7 +1992,7 @@ async function getPostByIdForViewer(postId, viewerId) {
   const result = await pool.query(
     `select p.id, p.body, p.image_url, p.repost_of, p.edited_at, p.deleted_at, p.created_at,
             u.id as author_id, u.username as author_username,
-            u.display_name as author_display_name, u.avatar_url as author_avatar_url,
+            u.display_name as author_display_name, u.show_role as author_show_role, u.avatar_url as author_avatar_url,
             ru.username as repost_author_username, ru.display_name as repost_author_display_name,
             rp.body as repost_body, rp.image_url as repost_image_url, rp.created_at as repost_created_at,
             (select count(*) from post_likes pl where pl.post_id = p.id) as likes_count,
@@ -2204,6 +2207,7 @@ async function getUserConversations(userId) {
             u.username as other_username,
             u.display_name as other_display_name,
             u.role as other_role,
+            u.show_role as other_show_role,
             u.avatar_url as other_avatar_url,
             u.is_verified as other_is_verified,
             u.status_text as other_status_text,
@@ -2251,6 +2255,7 @@ async function getUserConversations(userId) {
             u.username as other_username,
             u.display_name as other_display_name,
             u.role as other_role,
+            u.show_role as other_show_role,
             u.avatar_url as other_avatar_url,
             null::boolean as other_is_verified,
             null::text as other_status_text,
@@ -3240,6 +3245,7 @@ app.patch('/api/me', auth, ensureNotBanned, async (req, res) => {
     const displayName = typeof req.body.displayName === 'string' ? req.body.displayName.trim() : null
     const bio = typeof req.body.bio === 'string' ? req.body.bio.trim() : null
     const role = req.body.role ? normalizeRoleValue(req.body.role) : null
+    const showRole = normalizeBooleanFlag(req.body.showRole, null)
     const username = req.body.username ? normalizeUsername(req.body.username) : null
     const themeColor = typeof req.body.themeColor === 'string' ? req.body.themeColor.trim() : null
     const statusText = typeof req.body.statusText === 'string'
@@ -3287,26 +3293,46 @@ app.patch('/api/me', auth, ensureNotBanned, async (req, res) => {
              username = coalesce($4, username),
              theme_color = coalesce($5, theme_color),
              status_text = coalesce($6, status_text),
-             status_emoji = coalesce($7, status_emoji)
-         where id = $8
+             status_emoji = coalesce($7, status_emoji),
+             show_role = coalesce($8, show_role)
+         where id = $9
          returning *`,
-        [displayName, bio, role, username, themeColor, statusText, statusEmoji, req.userId]
+        [displayName, bio, role, username, themeColor, statusText, statusEmoji, showRole, req.userId]
       )
     } catch (err) {
       if (!(err && err.code === '42703')) {
         throw err
       }
-      result = await pool.query(
-        `update users
-         set display_name = coalesce($1, display_name),
-             bio = coalesce($2, bio),
-             role = coalesce($3, role),
-             username = coalesce($4, username),
-             theme_color = coalesce($5, theme_color)
-         where id = $6
-         returning *`,
-        [displayName, bio, role, username, themeColor, req.userId]
-      )
+      try {
+        result = await pool.query(
+          `update users
+           set display_name = coalesce($1, display_name),
+               bio = coalesce($2, bio),
+               role = coalesce($3, role),
+               username = coalesce($4, username),
+               theme_color = coalesce($5, theme_color),
+               status_text = coalesce($6, status_text),
+               status_emoji = coalesce($7, status_emoji)
+           where id = $8
+           returning *`,
+          [displayName, bio, role, username, themeColor, statusText, statusEmoji, req.userId]
+        )
+      } catch (statusErr) {
+        if (!(statusErr && statusErr.code === '42703')) {
+          throw statusErr
+        }
+        result = await pool.query(
+          `update users
+           set display_name = coalesce($1, display_name),
+               bio = coalesce($2, bio),
+               role = coalesce($3, role),
+               username = coalesce($4, username),
+               theme_color = coalesce($5, theme_color)
+           where id = $6
+           returning *`,
+          [displayName, bio, role, username, themeColor, req.userId]
+        )
+      }
     }
 
     if (result.rowCount === 0) return res.status(404).json({ error: 'User not found' })
@@ -3727,7 +3753,7 @@ app.get('/api/users/search', auth, ensureNotBanned, async (req, res) => {
       return res.json({ users: [] })
     }
     const result = await pool.query(
-      `select id, username, display_name, role
+      `select id, username, display_name, role, show_role
        from users
        where username ilike $1
          and id <> $2
@@ -3754,6 +3780,7 @@ app.get('/api/users/search', auth, ensureNotBanned, async (req, res) => {
       username: row.username,
       displayName: row.display_name,
       role: row.role,
+      showRole: row.show_role !== false,
       online: onlineUsers.has(row.id)
     }))
     res.json({ users })
@@ -3844,7 +3871,7 @@ app.get('/api/users/:username/posts', auth, ensureNotBanned, async (req, res) =>
     const result = await pool.query(
       `select p.id, p.body, p.image_url, p.repost_of, p.created_at,
               u.id as author_id, u.username as author_username,
-              u.display_name as author_display_name, u.avatar_url as author_avatar_url,
+              u.display_name as author_display_name, u.show_role as author_show_role, u.avatar_url as author_avatar_url,
               ru.username as repost_author_username, ru.display_name as repost_author_display_name,
               rp.body as repost_body, rp.image_url as repost_image_url, rp.created_at as repost_created_at,
               (select count(*) from post_likes pl where pl.post_id = p.id) as likes_count,
@@ -4069,6 +4096,7 @@ app.post('/api/conversations', auth, ensureNotBanned, async (req, res) => {
                 u.username as other_username,
                 u.display_name as other_display_name,
                 u.role as other_role,
+                u.show_role as other_show_role,
                 u.avatar_url as other_avatar_url,
                 u.is_verified as other_is_verified,
                 u.status_text as other_status_text,
@@ -4102,6 +4130,7 @@ app.post('/api/conversations', auth, ensureNotBanned, async (req, res) => {
                 u.username as other_username,
                 u.display_name as other_display_name,
                 u.role as other_role,
+                u.show_role as other_show_role,
                 u.avatar_url as other_avatar_url,
                 null::boolean as other_is_verified,
                 null::text as other_status_text,
@@ -5235,7 +5264,7 @@ app.get('/api/posts', auth, ensureNotBanned, async (req, res) => {
     const result = await pool.query(
        `select p.id, p.body, p.image_url, p.repost_of, p.edited_at, p.deleted_at, p.created_at,
               u.id as author_id, u.username as author_username,
-              u.display_name as author_display_name, u.avatar_url as author_avatar_url,
+              u.display_name as author_display_name, u.show_role as author_show_role, u.avatar_url as author_avatar_url,
               ru.username as repost_author_username, ru.display_name as repost_author_display_name,
               rp.body as repost_body, rp.image_url as repost_image_url, rp.created_at as repost_created_at,
               (select count(*) from post_likes pl where pl.post_id = p.id) as likes_count,
@@ -5358,7 +5387,7 @@ app.get('/api/posts/:id/comments', auth, ensureNotBanned, async (req, res) => {
     const postId = req.params.id
     const result = await pool.query(
       `select c.id, c.body, c.created_at,
-              u.id as user_id, u.username, u.display_name, u.avatar_url
+              u.id as user_id, u.username, u.display_name, u.show_role, u.avatar_url
        from post_comments c
        join users u on u.id = c.user_id
        where c.post_id = $1
@@ -5374,6 +5403,7 @@ app.get('/api/posts/:id/comments', auth, ensureNotBanned, async (req, res) => {
         id: row.user_id,
         username: row.username,
         displayName: row.display_name,
+        showRole: row.show_role !== false,
         avatarUrl: row.avatar_url
       }
     }))
@@ -5396,7 +5426,7 @@ app.post('/api/posts/:id/comments', auth, ensureNotBanned, async (req, res) => {
       [postId, req.userId, body]
     )
     const userRow = await pool.query(
-      'select id, username, display_name, avatar_url from users where id = $1',
+      'select id, username, display_name, show_role, avatar_url from users where id = $1',
       [req.userId]
     )
     res.json({
@@ -5408,6 +5438,7 @@ app.post('/api/posts/:id/comments', auth, ensureNotBanned, async (req, res) => {
           id: userRow.rows[0].id,
           username: userRow.rows[0].username,
           displayName: userRow.rows[0].display_name,
+          showRole: userRow.rows[0].show_role !== false,
           avatarUrl: userRow.rows[0].avatar_url
         }
       }

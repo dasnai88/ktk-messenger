@@ -5,6 +5,7 @@ class User {
     required this.username,
     this.displayName,
     this.role,
+    this.showRole = true,
     this.bio,
     this.avatarUrl,
     this.bannerUrl,
@@ -21,6 +22,7 @@ class User {
   final String username;
   final String? displayName;
   final String? role;
+  final bool showRole;
   final String? bio;
   final String? avatarUrl;
   final String? bannerUrl;
@@ -42,6 +44,7 @@ class User {
       username: (json['username'] ?? '').toString(),
       displayName: json['displayName']?.toString(),
       role: json['role']?.toString(),
+      showRole: json['showRole'] != false && json['show_role'] != false,
       bio: json['bio']?.toString(),
       avatarUrl: json['avatarUrl']?.toString(),
       bannerUrl: json['bannerUrl']?.toString(),

@@ -244,6 +244,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         bio: result.bio,
         username: result.username,
         role: result.role,
+        showRole: result.showRole,
         themeColor: result.themeColor,
       );
     } on ApiException catch (error) {
@@ -373,6 +374,7 @@ class _EditProfileDialogState extends State<_EditProfileDialog> {
   late final TextEditingController _usernameController;
   late final TextEditingController _themeController;
   String _role = 'programmist';
+  bool _showRole = true;
 
   final _roles = const [
     'programmist',
@@ -391,6 +393,7 @@ class _EditProfileDialogState extends State<_EditProfileDialog> {
     _usernameController = TextEditingController(text: widget.user.username);
     _themeController = TextEditingController(text: widget.user.themeColor ?? '#2aa7ff');
     _role = widget.user.role ?? _roles.first;
+    _showRole = widget.user.showRole;
   }
 
   @override
@@ -429,6 +432,13 @@ class _EditProfileDialogState extends State<_EditProfileDialog> {
               decoration: const InputDecoration(labelText: 'Role'),
             ),
             const SizedBox(height: 12),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              value: _showRole,
+              onChanged: (value) => setState(() => _showRole = value),
+              title: const Text('Show role publicly'),
+            ),
+            const SizedBox(height: 12),
             TextField(
               controller: _bioController,
               maxLines: 3,
@@ -452,6 +462,7 @@ class _EditProfileDialogState extends State<_EditProfileDialog> {
               bio: _bioController.text.trim(),
               username: _usernameController.text.trim(),
               role: _role,
+              showRole: _showRole,
               themeColor: _themeController.text.trim(),
             ),
           ),
@@ -468,6 +479,7 @@ class _ProfilePayload {
     required this.bio,
     required this.username,
     required this.role,
+    required this.showRole,
     required this.themeColor,
   });
 
@@ -475,5 +487,6 @@ class _ProfilePayload {
   final String bio;
   final String username;
   final String role;
+  final bool showRole;
   final String themeColor;
 }

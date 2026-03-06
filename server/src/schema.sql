@@ -41,6 +41,7 @@ create table if not exists users (
   username text unique not null,
   password_hash text not null,
   role text not null references roles(value) on update cascade,
+  show_role boolean default true,
   display_name text,
   bio text,
   status_text text,
@@ -615,6 +616,14 @@ END $$;
 DO $$ BEGIN
   ALTER TABLE users ADD COLUMN is_admin boolean default false;
 EXCEPTION WHEN duplicate_column THEN END $$;
+
+DO $$ BEGIN
+  ALTER TABLE users ADD COLUMN show_role boolean default true;
+EXCEPTION WHEN duplicate_column THEN END $$;
+
+UPDATE users
+SET show_role = true
+WHERE show_role IS NULL;
 
 DO $$ BEGIN
   ALTER TABLE users ADD COLUMN is_moderator boolean default false;

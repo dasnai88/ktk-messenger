@@ -154,6 +154,20 @@ const initialLogin = {
   password: ''
 }
 
+function buildProfileFormState(userData = null, fallbackRole = 'student') {
+  const source = userData && typeof userData === 'object' ? userData : {}
+  return {
+    username: source.username || '',
+    displayName: source.displayName || '',
+    bio: source.bio || '',
+    statusText: source.statusText || '',
+    statusEmoji: source.statusEmoji || '',
+    role: source.role || fallbackRole,
+    showRole: source.showRole !== false && source.show_role !== false,
+    themeColor: source.themeColor || '#7a1f1d'
+  }
+}
+
 const INITIAL_TWO_FACTOR_LOGIN_STATE = {
   pending: false,
   token: '',
@@ -1831,13 +1845,7 @@ export default function App() {
   const [loginForm, setLoginForm] = useState(initialLogin)
   const [twoFactorLogin, setTwoFactorLogin] = useState({ ...INITIAL_TWO_FACTOR_LOGIN_STATE })
   const [profileForm, setProfileForm] = useState({
-    username: '',
-    displayName: '',
-    bio: '',
-    statusText: '',
-    statusEmoji: '',
-    role: 'student',
-    themeColor: '#7a1f1d'
+    ...buildProfileFormState()
   })
   const [passwordForm, setPasswordForm] = useState({
     currentPassword: '',
@@ -4446,15 +4454,7 @@ export default function App() {
       try {
         const data = await getMe()
         setUser(data.user)
-        setProfileForm({
-          username: data.user.username || '',
-          displayName: data.user.displayName || '',
-          bio: data.user.bio || '',
-          statusText: data.user.statusText || '',
-          statusEmoji: data.user.statusEmoji || '',
-          role: data.user.role || 'student',
-          themeColor: data.user.themeColor || '#7a1f1d'
-        })
+        setProfileForm(buildProfileFormState(data.user))
         setView(readStoredView(Boolean(data.user && data.user.isAdmin)))
       } catch (err) {
         setUser(null)
@@ -5653,15 +5653,7 @@ export default function App() {
       setToken(data.token)
       setUser(data.user)
       setTwoFactorLogin({ ...INITIAL_TWO_FACTOR_LOGIN_STATE })
-      setProfileForm({
-        username: data.user.username || '',
-        displayName: data.user.displayName || '',
-        bio: data.user.bio || '',
-        statusText: data.user.statusText || '',
-        statusEmoji: data.user.statusEmoji || '',
-        role: data.user.role || registerForm.role,
-        themeColor: data.user.themeColor || '#7a1f1d'
-      })
+      setProfileForm(buildProfileFormState(data.user, registerForm.role))
       setView('feed')
       setStatus({ type: 'success', message: 'Регистрация завершена.' })
       setRegisterForm(initialRegister)
@@ -5691,15 +5683,7 @@ export default function App() {
       setToken(data.token)
       setUser(data.user)
       setTwoFactorLogin({ ...INITIAL_TWO_FACTOR_LOGIN_STATE })
-      setProfileForm({
-        username: data.user.username || '',
-        displayName: data.user.displayName || '',
-        bio: data.user.bio || '',
-        statusText: data.user.statusText || '',
-        statusEmoji: data.user.statusEmoji || '',
-        role: data.user.role || 'student',
-        themeColor: data.user.themeColor || '#7a1f1d'
-      })
+      setProfileForm(buildProfileFormState(data.user))
       setView('feed')
       setStatus({
         type: 'success',
@@ -5735,15 +5719,7 @@ export default function App() {
       setToken(data.token)
       setUser(data.user)
       setTwoFactorLogin({ ...INITIAL_TWO_FACTOR_LOGIN_STATE })
-      setProfileForm({
-        username: data.user.username || '',
-        displayName: data.user.displayName || '',
-        bio: data.user.bio || '',
-        statusText: data.user.statusText || '',
-        statusEmoji: data.user.statusEmoji || '',
-        role: data.user.role || 'student',
-        themeColor: data.user.themeColor || '#7a1f1d'
-      })
+      setProfileForm(buildProfileFormState(data.user))
       setView('feed')
       setStatus({ type: 'success', message: 'Signed in with 2FA.' })
       setLoginForm(initialLogin)
@@ -5770,15 +5746,7 @@ export default function App() {
         showcaseSaveError = showcaseErr.message
       }
       setUser(data.user)
-      setProfileForm({
-        username: data.user.username || '',
-        displayName: data.user.displayName || '',
-        bio: data.user.bio || '',
-        statusText: data.user.statusText || '',
-        statusEmoji: data.user.statusEmoji || '',
-        role: data.user.role || 'student',
-        themeColor: data.user.themeColor || '#7a1f1d'
-      })
+      setProfileForm(buildProfileFormState(data.user))
       if (data.user && data.user.id) {
         setProfileShowcaseByUserId((prev) => ({
           ...prev,
@@ -6323,6 +6291,17 @@ export default function App() {
     if (targetUser.isOwner === true || targetUser.is_owner === true) return true
     if (String(targetUser.role || '').trim() === '*') return true
     return getUserRoleList(targetUser).includes('*')
+  }
+
+  const canViewerSeeRoleInfo = (targetUser, viewer = user) => {
+    if (!targetUser || typeof targetUser !== 'object') return false
+    const targetId = String(targetUser.id || '').trim()
+    const viewerId = String(viewer && viewer.id ? viewer.id : '').trim()
+    if (targetId && viewerId && targetId === viewerId) return true
+    const targetUsername = String(targetUser.username || '').trim().toLowerCase()
+    const viewerUsername = String(viewer && viewer.username ? viewer.username : '').trim().toLowerCase()
+    if (targetUsername && viewerUsername && targetUsername === viewerUsername) return true
+    return targetUser.showRole !== false && targetUser.show_role !== false
   }
 
   const currentUserIsOwner = isOwnerUser(user)
@@ -7927,6 +7906,7 @@ export default function App() {
     const username = String(rawUser.username || '').trim()
     const id = rawUser.id ? String(rawUser.id) : (username ? `username:${username}` : '')
     if (!id && !username) return null
+    const showRole = canViewerSeeRoleInfo(rawUser)
     const roleValues = getUserRoleList(rawUser)
     const roleLabels = roleValues
       .map((value) => roleLabelByValue.get(value) || value)
@@ -7936,10 +7916,12 @@ export default function App() {
     const statusText = String(rawUser.statusText || '').trim()
     const isVerified = rawUser.isVerified === true || rawUser.is_verified === true
     const isOwner = (
-      rawUser.isOwner === true ||
-      rawUser.is_owner === true ||
-      roleValues.includes('*') ||
-      String(rawUser.role || '').trim() === '*'
+      showRole && (
+        rawUser.isOwner === true ||
+        rawUser.is_owner === true ||
+        roleValues.includes('*') ||
+        String(rawUser.role || '').trim() === '*'
+      )
     )
     const subscriptionKnown = Object.prototype.hasOwnProperty.call(rawUser, 'isSubscribed')
       || Object.prototype.hasOwnProperty.call(rawUser, 'is_subscribed')
@@ -7960,7 +7942,8 @@ export default function App() {
       username,
       displayName,
       avatarUrl: rawUser.avatarUrl || '',
-      roleLabels: roleLabels.length > 0 ? roleLabels : ['Студент'],
+      roleLabels: showRole ? roleLabels : [],
+      showRole,
       isVerified,
       isOwner,
       statusEmoji,
@@ -7978,6 +7961,7 @@ export default function App() {
     if (!baseUser && !extraUser) return null
     if (!baseUser) return extraUser
     if (!extraUser) return baseUser
+    const showRole = baseUser.showRole !== false && extraUser.showRole !== false
     const roleLabels = Array.from(new Set([
       ...(Array.isArray(extraUser.roleLabels) ? extraUser.roleLabels : []),
       ...(Array.isArray(baseUser.roleLabels) ? baseUser.roleLabels : [])
@@ -7999,9 +7983,10 @@ export default function App() {
     return {
       ...baseUser,
       ...extraUser,
-      roleLabels: roleLabels.length > 0 ? roleLabels : ['Студент'],
+      roleLabels: showRole ? roleLabels : [],
+      showRole,
       isVerified: baseUser.isVerified === true || extraUser.isVerified === true,
-      isOwner: baseUser.isOwner === true || extraUser.isOwner === true,
+      isOwner: showRole && (baseUser.isOwner === true || extraUser.isOwner === true),
       isSubscribed,
       subscriptionKnown,
       subscribersCount,
@@ -9622,9 +9607,12 @@ export default function App() {
     return normalizePrivacyRelation(privacyByUsername[username])
   }, [miniProfileCard, privacyByUsername])
   const miniProfileDmBlocked = miniProfilePrivacy.isBlocked || miniProfilePrivacy.blockedByTarget || miniProfilePrivacy.dmBlocked
+  const profileViewShowsRole = useMemo(() => canViewerSeeRoleInfo(profileView), [profileView, user])
   const profileViewRoleLabels = useMemo(() => (
-    getUserRoleList(profileView).map((value) => roleLabelByValue.get(value) || value)
-  ), [profileView, roleLabelByValue])
+    profileViewShowsRole
+      ? getUserRoleList(profileView).map((value) => roleLabelByValue.get(value) || value)
+      : []
+  ), [profileView, profileViewShowsRole, roleLabelByValue])
   const verificationRequestStatus = verificationRequest ? normalizeVerificationStatus(verificationRequest.status) : ''
   const verificationRequestStatusLabel = verificationRequestStatus
     ? (verificationStatusLabelByValue.get(verificationRequestStatus) || 'На проверке')
@@ -9926,7 +9914,9 @@ export default function App() {
                   ) : (
                     <div className="global-palette-user-list">
                       {globalPaletteUsers.map((item) => {
-                        const roleLabel = item && item.role ? (roleLabelByValue.get(String(item.role)) || item.role) : 'Студент'
+                        const roleLabel = canViewerSeeRoleInfo(item)
+                          ? (item && item.role ? (roleLabelByValue.get(String(item.role)) || item.role) : 'Студент')
+                          : ''
                         return (
                           <button
                             key={`global-palette-user-${item.id || item.username}`}
@@ -9946,7 +9936,7 @@ export default function App() {
                             </div>
                             <div>
                               <strong>{item.displayName || item.username}</strong>
-                              <span>@{item.username} • {roleLabel}</span>
+                              <span>{roleLabel ? `@${item.username} • ${roleLabel}` : `@${item.username}`}</span>
                             </div>
                           </button>
                         )
@@ -12620,7 +12610,7 @@ export default function App() {
                       <h2 className="profile-hero-name">
                         {profileView.displayName || profileView.username}
                         {profileView.isVerified && <span className="verified-mark" title="Верифицированный профиль">✓</span>}
-                        {isOwnerUser(profileView) && <span className="owner-mark" title="Owner">*</span>}
+                        {profileViewShowsRole && isOwnerUser(profileView) && <span className="owner-mark" title="Owner">*</span>}
                       </h2>
                       <span>@{profileView.username}</span>
                       {profileViewRoleLabels.length > 0 && (
@@ -14482,6 +14472,14 @@ export default function App() {
                 ))}
               </select>
             </label>
+            <label className="ui-studio-toggle">
+              <input
+                type="checkbox"
+                checked={profileForm.showRole !== false}
+                onChange={(event) => setProfileForm({ ...profileForm, showRole: event.target.checked })}
+              />
+              <span>Показывать роль в публичном профиле</span>
+            </label>
             <section className="profile-verification-card">
               <div className="profile-verification-head">
                 <h3>Verification</h3>
@@ -15024,7 +15022,7 @@ export default function App() {
                     {miniProfileCard.user.displayName || miniProfileCard.user.username || 'Пользователь'}
                   </span>
                   {miniProfileCard.user.isVerified && <span className="verified-mark mini-profile-verified" title="Верифицированный профиль">✓</span>}
-                  {miniProfileCard.user.isOwner && <span className="owner-mark mini-profile-owner" title="Owner">*</span>}
+                  {miniProfileCard.user.showRole !== false && miniProfileCard.user.isOwner && <span className="owner-mark mini-profile-owner" title="Owner">*</span>}
                 </strong>
                 {miniProfileCard.user.username && <span>@{miniProfileCard.user.username}</span>}
               </div>
@@ -15033,11 +15031,13 @@ export default function App() {
               </span>
             </div>
             <div className="mini-profile-meta">
-              <div className="mini-profile-role-list">
-                {(Array.isArray(miniProfileCard.user.roleLabels) ? miniProfileCard.user.roleLabels : ['Студент']).map((roleLabel, index) => (
-                  <span key={`mini-profile-role-${index}-${roleLabel}`} className="mini-profile-role">{roleLabel}</span>
-                ))}
-              </div>
+              {miniProfileCard.user.showRole !== false && Array.isArray(miniProfileCard.user.roleLabels) && miniProfileCard.user.roleLabels.length > 0 ? (
+                <div className="mini-profile-role-list">
+                  {miniProfileCard.user.roleLabels.map((roleLabel, index) => (
+                    <span key={`mini-profile-role-${index}-${roleLabel}`} className="mini-profile-role">{roleLabel}</span>
+                  ))}
+                </div>
+              ) : null}
               {miniProfileCard.user.subscribersCountKnown ? (
                 <span className="mini-profile-counter">{miniProfileCard.user.subscribersCount} подписчиков</span>
               ) : null}
