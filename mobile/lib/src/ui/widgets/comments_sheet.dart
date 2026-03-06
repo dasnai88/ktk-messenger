@@ -79,7 +79,7 @@ class _CommentsSheetState extends State<CommentsSheet> {
                     : ListView.separated(
                         controller: scrollController,
                         itemCount: _comments.length,
-                        separatorBuilder: (_, __) => const Divider(height: 24),
+                        separatorBuilder: (_, _) => const Divider(height: 24),
                         itemBuilder: (context, index) {
                           final comment = _comments[index];
                           return Row(

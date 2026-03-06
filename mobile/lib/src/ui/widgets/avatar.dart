@@ -37,12 +37,12 @@ class Avatar extends StatelessWidget {
           width: size,
           height: size,
           fit: BoxFit.cover,
-          placeholder: (_, __) => Container(
+          placeholder: (_, _) => Container(
             width: size,
             height: size,
             color: Colors.black12,
           ),
-          errorWidget: (_, __, ___) => Container(
+          errorWidget: (_, _, _) => Container(
             width: size,
             height: size,
             color: Colors.black12,

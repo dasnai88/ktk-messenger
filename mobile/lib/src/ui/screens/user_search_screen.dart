@@ -61,7 +61,7 @@ class _UserSearchScreenState extends State<UserSearchScreen> {
               Expanded(
                 child: ListView.separated(
                   itemCount: _results.length,
-                  separatorBuilder: (_, __) => const Divider(height: 16),
+                  separatorBuilder: (_, _) => const Divider(height: 16),
                   itemBuilder: (context, index) {
                     final user = _results[index];
                     final isCreating = _creatingFor == user.username;

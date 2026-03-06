@@ -98,11 +98,11 @@ class PostCard extends StatelessWidget {
                     imageUrl: AppConfig.resolveMediaUrl(post.imageUrl),
                     fit: BoxFit.cover,
                     width: double.infinity,
-                    placeholder: (_, __) => Container(
+                    placeholder: (_, _) => Container(
                       height: 180,
                       color: Colors.black12,
                     ),
-                    errorWidget: (_, __, ___) => Container(
+                    errorWidget: (_, _, _) => Container(
                       height: 180,
                       color: Colors.black12,
                       alignment: Alignment.center,

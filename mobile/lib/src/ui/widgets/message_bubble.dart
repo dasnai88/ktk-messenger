@@ -67,12 +67,12 @@ class MessageBubble extends StatelessWidget {
                       width: 180,
                       height: 140,
                       fit: BoxFit.cover,
-                      placeholder: (_, __) => Container(
+                      placeholder: (_, _) => Container(
                         width: 180,
                         height: 140,
                         color: Colors.black12,
                       ),
-                      errorWidget: (_, __, ___) => Container(
+                      errorWidget: (_, _, _) => Container(
                         width: 180,
                         height: 140,
                         color: Colors.black12,
