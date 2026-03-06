@@ -10479,38 +10479,6 @@ export default function App() {
     chips.push({ id: 'push', tone: pushState.enabled ? 'accent' : 'muted', label: settingsPushBadge })
     return chips
   }, [currentUserIsOwner, pushState.enabled, settingsPushBadge, twoFactorStatus.enabled, user])
-  const settingsSidebarSignals = useMemo(() => ([
-    {
-      id: 'shield',
-      label: 'Shield',
-      value: twoFactorStatus.enabled ? 'Ready' : 'Base mode',
-      meta: twoFactorStatus.enabled ? '2FA уже активна' : 'Включи 2FA для входа'
-    },
-    {
-      id: 'signals',
-      label: 'Signals',
-      value: settingsPushBadge,
-      meta: pushState.permission === 'denied' ? 'Браузер блокирует уведомления' : 'Push управляются из аккаунта'
-    },
-    {
-      id: 'privacy',
-      label: 'Privacy',
-      value: privacyControls.length > 0 ? `${privacyControls.length} rules` : 'Open',
-      meta: privacyControls.length > 0 ? 'Есть кастомные ограничения' : 'Нет ручных privacy-правил'
-    },
-    {
-      id: 'storage',
-      label: 'Storage',
-      value: settingsDraftCount > 0 ? `${settingsDraftCount} drafts` : 'Clean',
-      meta: settingsDraftCount > 0 ? 'Сохранены локальные черновики' : 'Локальное хранилище чистое'
-    }
-  ]), [
-    privacyControls.length,
-    pushState.permission,
-    settingsDraftCount,
-    settingsPushBadge,
-    twoFactorStatus.enabled
-  ])
   const settingsWorkspaceStats = useMemo(() => ([
     {
       id: 'security',
@@ -10545,196 +10513,6 @@ export default function App() {
     settingsSecurityBadge,
     uiPreferences.style
   ])
-  const settingsOverviewCards = useMemo(() => ([
-    {
-      id: 'identity',
-      eyebrow: 'Identity',
-      title: 'Профиль и публичный вид',
-      value: user && (user.displayName || user.username) ? (user.displayName || user.username) : 'Профиль',
-      meta: settingsRoleLabels.length > 0 ? settingsRoleLabels.join(' • ') : 'Студент',
-      actionLabel: 'Открыть профиль',
-      onClick: () => setView('profile')
-    },
-    {
-      id: 'security',
-      eyebrow: 'Protection',
-      title: 'Защита входа',
-      value: settingsSecurityBadge,
-      meta: twoFactorStatus.enabled ? 'Backup codes и контроль устройств уже доступны' : 'Добавь 2FA и проверь список устройств',
-      actionLabel: 'Открыть защиту',
-      onClick: () => setSettingsSection('security')
-    },
-    {
-      id: 'presence',
-      eyebrow: 'Signals',
-      title: 'Уведомления и privacy',
-      value: settingsPushBadge,
-      meta: privacyControls.length > 0 ? `Активно ${privacyControls.length} privacy rule(s)` : 'Нет ручных privacy-ограничений',
-      actionLabel: 'Открыть privacy',
-      onClick: () => setSettingsSection('privacy')
-    }
-  ]), [
-    privacyControls.length,
-    settingsPushBadge,
-    settingsRoleLabels,
-    settingsSecurityBadge,
-    twoFactorStatus.enabled,
-    user
-  ])
-  const settingsHeroActions = [
-    {
-      id: 'profile',
-      label: 'Профиль',
-      meta: 'Аватар, обложка и публичная карточка',
-      onClick: () => setView('profile')
-    },
-    {
-      id: 'security',
-      label: 'Защита',
-      meta: twoFactorStatus.enabled ? '2FA уже включена' : 'Настроить 2FA',
-      onClick: () => setSettingsSection('security')
-    },
-    {
-      id: 'sessions',
-      label: 'Сеансы',
-      meta: `${settingsActiveSessionCount} активных`,
-      onClick: () => setSettingsSection('sessions')
-    },
-    {
-      id: 'privacy',
-      label: 'Privacy',
-      meta: privacyControls.length > 0 ? `${privacyControls.length} правил` : 'Настроить ограничения',
-      onClick: () => setSettingsSection('privacy')
-    }
-  ]
-  const settingsCurrentFocus = useMemo(() => {
-    const map = {
-      general: {
-        title: 'Базовая конфигурация аккаунта',
-        summary: 'Главная точка входа для профиля, темы и системных переключателей.',
-        points: [
-          'Проверь публичный профиль и отображение роли.',
-          theme === 'dark' ? 'Сейчас активна тёмная тема.' : 'Сейчас активна светлая тема.',
-          pushState.enabled ? 'Push уже включены.' : 'Push можно включить без выхода из раздела.'
-        ]
-      },
-      notifications: {
-        title: 'Сигналы и browser delivery',
-        summary: 'Контроль того, как сервис сообщает о новых событиях.',
-        points: [
-          pushState.enabled ? 'Push уведомления активны.' : 'Push сейчас выключены.',
-          pushState.permission === 'denied' ? 'Разрешение браузера заблокировано.' : 'Разрешение браузера можно переключать из UI.',
-          'Секция не перегружена: один action, один статус, быстрый доступ.'
-        ]
-      },
-      appearance: {
-        title: 'UI studio',
-        summary: 'Слой настройки стиля, плотности, glow и цветовой системы.',
-        points: [
-          `Текущий стиль: ${uiPreferences.style}.`,
-          `Режим интерфейса: ${settingsIdentityBadge}.`,
-          uiPreferences.syncAccent ? 'Accent синхронизирован с профилем.' : 'Accent управляется вручную.'
-        ]
-      },
-      privacy: {
-        title: 'Privacy control',
-        summary: 'Ручные правила для mute, block, hide profile и deny DM.',
-        points: [
-          privacyControls.length > 0 ? `Активно ${privacyControls.length} кастомных правил.` : 'Сейчас нет кастомных privacy-правил.',
-          'Есть быстрый поиск пользователя по @username.',
-          'Batch actions помогают массово усилить защиту.'
-        ]
-      },
-      security: {
-        title: 'Слой защиты',
-        summary: '2FA, backup-коды и контроль критичных входов.',
-        points: [
-          twoFactorStatus.enabled ? '2FA активирована.' : '2FA пока отключена.',
-          twoFactorStatus.enabled ? 'Backup codes можно регенерировать.' : 'Секрет и QR доступны для привязки.',
-          'Всё критичное сведено в один экран.'
-        ]
-      },
-      password: {
-        title: 'Пароль и доверие устройствам',
-        summary: 'Смена пароля с чисткой лишних сеансов.',
-        points: [
-          'После смены пароля можно закрыть чужие устройства.',
-          'Форма ориентирована на быстрый проход без лишних шагов.',
-          'Используй вместе с 2FA для полной защиты.'
-        ]
-      },
-      sessions: {
-        title: 'Матрица устройств',
-        summary: 'Список активных входов и ручная ревокация любых сеансов.',
-        points: [
-          `${settingsActiveSessionCount} активных сеансов в системе.`,
-          'Текущий девайс помечается отдельно.',
-          'Лишние входы можно закрыть точечно или массово.'
-        ]
-      },
-      storage: {
-        title: 'Локальные данные',
-        summary: 'Точка очистки черновиков и браузерного мусора.',
-        points: [
-          settingsDraftCount > 0 ? `Сохранено ${settingsDraftCount} черновиков.` : 'Черновики сейчас пусты.',
-          'Операция работает локально и не трогает сервер.',
-          'Полезно перед сменой устройства или общего ПК.'
-        ]
-      },
-      stickers: {
-        title: 'Media shortcuts',
-        summary: 'Прямые переходы к наборам стикеров и GIF.',
-        points: [
-          `${myStickers.length} sticker set(s) в аккаунте.`,
-          `${myGifs.length} GIF item(s) сохранено.`,
-          'Переходы ведут сразу в нужную вкладку чатов.'
-        ]
-      },
-      language: {
-        title: 'Локаль интерфейса',
-        summary: 'Секция зарезервирована под языковой слой приложения.',
-        points: [
-          'Сейчас интерфейс работает на русском.',
-          'Раздел готов под будущие locale presets.',
-          'Изменение локали пока не требует отдельных API.'
-        ]
-      },
-      support: {
-        title: 'Support links',
-        summary: 'Внешние справочные материалы и FAQ.',
-        points: [
-          'Сюда вынесены быстрые reference-ссылки.',
-          'Раздел можно расширить до полноценного help center.',
-          'Текущий входной пункт ведёт на Telegram FAQ.'
-        ]
-      }
-    }
-    return map[settingsSection] || {
-      title: 'Настройки аккаунта',
-      summary: 'Управление настройками аккаунта.',
-      points: ['Выбери раздел в навигации.', 'Текущая структура адаптирована под быстрый проход.', 'Все настройки сохраняют прежние действия.']
-    }
-  }, [
-    myGifs.length,
-    myStickers.length,
-    privacyControls.length,
-    pushState.enabled,
-    pushState.permission,
-    settingsActiveSessionCount,
-    settingsDraftCount,
-    settingsIdentityBadge,
-    settingsSection,
-    theme,
-    twoFactorStatus.enabled,
-    uiPreferences.style,
-    uiPreferences.syncAccent
-  ])
-  const settingsRailActions = useMemo(() => {
-    if (!settingsCurrentItem) return []
-    return settingsNavItems
-      .filter((item) => item.group === settingsCurrentItem.group && item.id !== settingsCurrentItem.id)
-      .slice(0, 3)
-  }, [settingsCurrentItem, settingsNavItems])
   const settingsPanelClassName = `panel settings-panel settings-panel-redesign settings-theme-${settingsSection}`.trim()
 
   return (
@@ -14775,26 +14553,11 @@ export default function App() {
                     ))}
                   </div>
                 </div>
-                <section className="settings-sidebar-cluster">
-                  <div className="settings-sidebar-head">
-                    <span className="settings-nav-caption">Workspace pulse</span>
-                    <strong>Состояние аккаунта</strong>
-                  </div>
-                  <div className="settings-sidebar-signal-grid">
-                    {settingsSidebarSignals.map((item) => (
-                      <article key={`settings-sidebar-signal-${item.id}`} className="settings-sidebar-signal">
-                        <span>{item.label}</span>
-                        <strong>{item.value}</strong>
-                        <small>{item.meta}</small>
-                      </article>
-                    ))}
-                  </div>
-                </section>
                 <div className="settings-nav-wrap">
                   <div className="settings-nav-head">
                     <div>
                       <span className="settings-nav-caption">Разделы</span>
-                      <strong>Settings workspace</strong>
+                      <strong>Настройки</strong>
                     </div>
                     <span className="settings-nav-counter">{settingsVisibleNavItems.length}</span>
                   </div>
@@ -14822,10 +14585,7 @@ export default function App() {
                             onClick={() => setSettingsSection(item.id)}
                           >
                             <span className="settings-nav-icon" aria-hidden="true">{item.icon}</span>
-                            <span className="settings-nav-copy">
-                              <span className="settings-nav-label">{item.label}</span>
-                              <small>{item.description}</small>
-                            </span>
+                            <span className="settings-nav-label">{item.label}</span>
                             {item.badge ? <span className="settings-nav-badge">{item.badge}</span> : null}
                           </button>
                         ))}
@@ -14840,7 +14600,7 @@ export default function App() {
               <div className="settings-content">
                 <section className="settings-hero">
                   <div className="settings-hero-main">
-                    <span className="settings-hero-overline">Settings control</span>
+                    <span className="settings-hero-overline">Settings</span>
                     <h2>Настройки аккаунта</h2>
                     <p>{settingsSectionHint}</p>
                     <div className="settings-hero-chip-row">
@@ -14851,19 +14611,6 @@ export default function App() {
                         </span>
                       ) : null}
                       <span className="settings-hero-chip muted">{settingsIdentityBadge} mode</span>
-                    </div>
-                    <div className="settings-hero-actions">
-                      {settingsHeroActions.map((action) => (
-                        <button
-                          key={`settings-hero-action-${action.id}`}
-                          type="button"
-                          className="settings-hero-action"
-                          onClick={action.onClick}
-                        >
-                          <strong>{action.label}</strong>
-                          <span>{action.meta}</span>
-                        </button>
-                      ))}
                     </div>
                   </div>
                   <div className="settings-hero-rail">
@@ -14878,17 +14625,6 @@ export default function App() {
                     </div>
                   </div>
                 </section>
-                <section className="settings-overview-grid">
-                  {settingsOverviewCards.map((card) => (
-                    <article key={`settings-overview-${card.id}`} className="settings-overview-card">
-                      <span className="settings-overview-eyebrow">{card.eyebrow}</span>
-                      <strong>{card.value}</strong>
-                      <h3>{card.title}</h3>
-                      <p>{card.meta}</p>
-                      <button type="button" className="ghost" onClick={card.onClick}>{card.actionLabel}</button>
-                    </article>
-                  ))}
-                </section>
                 <section className="settings-quick-tabs" aria-label="Быстрые разделы настроек">
                   {settingsQuickTabs.map((item) => (
                     <button
@@ -14902,8 +14638,6 @@ export default function App() {
                     </button>
                   ))}
                 </section>
-                <div className="settings-workspace-grid">
-                  <div className="settings-workspace-main">
                 {settingsSection === 'general' && (
                   <section className="settings-pane">
                     <h2>Общие настройки</h2>
@@ -15793,59 +15527,6 @@ export default function App() {
                     </div>
                   </section>
                 )}
-                  </div>
-                  <aside className="settings-workspace-rail">
-                    <section className="settings-context-card">
-                      <span className="settings-context-overline">В фокусе</span>
-                      <h3>{settingsCurrentFocus.title}</h3>
-                      <p>{settingsCurrentFocus.summary}</p>
-                      <div className="settings-context-points">
-                        {settingsCurrentFocus.points.map((point, idx) => (
-                          <div key={`settings-focus-point-${idx}`} className="settings-context-point">
-                            <span aria-hidden="true">•</span>
-                            <small>{point}</small>
-                          </div>
-                        ))}
-                      </div>
-                    </section>
-                    <section className="settings-context-card">
-                      <span className="settings-context-overline">Переходы</span>
-                      <div className="settings-context-actions">
-                        {settingsRailActions.map((item) => (
-                          <button
-                            key={`settings-rail-action-${item.id}`}
-                            type="button"
-                            className="settings-context-action"
-                            onClick={() => setSettingsSection(item.id)}
-                          >
-                            <span aria-hidden="true">{item.icon}</span>
-                            <div>
-                              <strong>{item.label}</strong>
-                              <small>{item.description}</small>
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                    </section>
-                    <section className="settings-context-card">
-                      <span className="settings-context-overline">Аккаунт</span>
-                      <div className="settings-account-facts">
-                        <div>
-                          <span>Username</span>
-                          <strong>@{user.username}</strong>
-                        </div>
-                        <div>
-                          <span>Theme</span>
-                          <strong>{settingsIdentityBadge}</strong>
-                        </div>
-                        <div>
-                          <span>Live signals</span>
-                          <strong>{settingsPushBadge}</strong>
-                        </div>
-                      </div>
-                    </section>
-                  </aside>
-                </div>
               </div>
             </div>
           </section>
