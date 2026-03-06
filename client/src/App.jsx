@@ -10466,6 +10466,7 @@ export default function App() {
       ? 'Blocked'
       : 'Push OFF'
   const settingsIdentityBadge = theme === 'dark' ? 'Dark' : 'Light'
+  const settingsSecurityBadge = twoFactorStatus.enabled ? '2FA ON' : '2FA OFF'
   const settingsStatusChips = useMemo(() => {
     const chips = []
     if (user && user.isVerified) chips.push({ id: 'verified', tone: 'success', label: 'Verified' })
@@ -10734,7 +10735,6 @@ export default function App() {
       .filter((item) => item.group === settingsCurrentItem.group && item.id !== settingsCurrentItem.id)
       .slice(0, 3)
   }, [settingsCurrentItem, settingsNavItems])
-  const settingsSecurityBadge = twoFactorStatus.enabled ? '2FA ON' : '2FA OFF'
   const settingsPanelClassName = `panel settings-panel settings-panel-redesign settings-theme-${settingsSection}`.trim()
 
   return (
