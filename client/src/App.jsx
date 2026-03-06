@@ -2871,15 +2871,6 @@ export default function App() {
       hasMedia: Boolean(postFile)
     }
   }, [postText, composerHashtags, postFile])
-  const feedComposerPromptOptions = useMemo(() => {
-    const hottestTag = trendingTags[0] ? trendingTags[0].tag : '#campus'
-    return [
-      { id: 'status', label: 'Статус', text: 'Короткий апдейт дня:\n- что сделал\n- что дальше\n- где нужен фидбек' },
-      { id: 'question', label: 'Вопрос', text: `Есть вопрос к сообществу по теме ${hottestTag}:` },
-      { id: 'showcase', label: 'Showcase', text: 'Показываю свежий прогресс по проекту:\n- идея\n- результат\n- следующий шаг' },
-      { id: 'collab', label: 'Коллаб', text: 'Ищу напарника / команду для задачи:\n- направление\n- стек\n- формат участия' }
-    ]
-  }, [trendingTags])
   const feedComposerProgress = useMemo(() => {
     const target = 280
     const chars = Number(feedComposerInsights.chars || 0)
@@ -2923,6 +2914,15 @@ export default function App() {
       .slice(0, 8)
       .map(([tag, count]) => ({ tag, count }))
   }, [posts])
+  const feedComposerPromptOptions = useMemo(() => {
+    const hottestTag = trendingTags[0] ? trendingTags[0].tag : '#campus'
+    return [
+      { id: 'status', label: 'Статус', text: 'Короткий апдейт дня:\n- что сделал\n- что дальше\n- где нужен фидбек' },
+      { id: 'question', label: 'Вопрос', text: `Есть вопрос к сообществу по теме ${hottestTag}:` },
+      { id: 'showcase', label: 'Showcase', text: 'Показываю свежий прогресс по проекту:\n- идея\n- результат\n- следующий шаг' },
+      { id: 'collab', label: 'Коллаб', text: 'Ищу напарника / команду для задачи:\n- направление\n- стек\n- формат участия' }
+    ]
+  }, [trendingTags])
   const topFeedAuthors = useMemo(() => {
     const authorStats = new Map()
     posts.forEach((post) => {
