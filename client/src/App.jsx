@@ -2177,6 +2177,8 @@ export default function App() {
   const [editingPostId, setEditingPostId] = useState(null)
   const [editingPostText, setEditingPostText] = useState('')
   const [adminQuery, setAdminQuery] = useState('')
+  const [adminWorkspaceTab, setAdminWorkspaceTab] = useState('overview')
+  const [adminUserFilter, setAdminUserFilter] = useState('all')
   const [adminUsers, setAdminUsers] = useState([])
   const [adminWarnReason, setAdminWarnReason] = useState({})
   const [adminResetPasswordByUser, setAdminResetPasswordByUser] = useState({})
@@ -4884,8 +4886,7 @@ export default function App() {
 
   useEffect(() => {
     if (!user || !user.isAdmin || view !== 'admin') return
-    loadAdminUsers(adminQuery)
-    loadAdminVerificationRequests(adminVerificationFilter, adminQuery)
+    refreshAdminWorkspace(adminQuery, adminVerificationFilter)
   }, [view, user ? user.id : null, user ? user.isAdmin : false])
 
   useEffect(() => {
@@ -6911,6 +6912,16 @@ export default function App() {
     }
   }
 
+  const refreshAdminWorkspace = async (
+    query = adminQuery,
+    verificationStatus = adminVerificationFilter
+  ) => {
+    await Promise.all([
+      loadAdminUsers(query || ''),
+      loadAdminVerificationRequests(verificationStatus || 'pending', query || '')
+    ])
+  }
+
   const handleCreateVerificationRequest = async () => {
     if (!user) return
     const payload = {
@@ -7231,6 +7242,8 @@ export default function App() {
     setVerificationRequest(null)
     setVerificationForm({ ...initialVerificationForm })
     setVerificationSubmitting(false)
+    setAdminWorkspaceTab('overview')
+    setAdminUserFilter('all')
     setAdminUsers([])
     setAdminWarnReason({})
     setAdminResetPasswordByUser({})
@@ -10096,6 +10109,130 @@ export default function App() {
       }
     }).filter(Boolean)
   ), [adminVerificationRequests, roleLabelByValue])
+  const adminVerificationStatusCounts = useMemo(() => {
+    const counts = {
+      pending: 0,
+      approved: 0,
+      rejected: 0,
+      cancelled: 0,
+      all: adminVerificationRows.length
+    }
+    adminVerificationRows.forEach((item) => {
+      const key = normalizeVerificationStatus(item && item.status ? item.status : 'pending')
+      counts[key] = (counts[key] || 0) + 1
+    })
+    return counts
+  }, [adminVerificationRows])
+  const adminOverviewStats = useMemo(() => {
+    const usersTotal = adminUsers.length
+    const owners = adminUsers.filter((item) => isOwnerUser(item)).length
+    const admins = adminUsers.filter((item) => item && item.is_admin).length
+    const moderators = adminUsers.filter((item) => item && item.is_moderator).length
+    const verified = adminUsers.filter((item) => item && item.is_verified).length
+    const banned = adminUsers.filter((item) => item && item.is_banned).length
+    const warnings = adminUsers.filter((item) => Number(item && item.warnings_count ? item.warnings_count : 0) > 0).length
+    const staff = adminUsers.filter((item) => item && (isOwnerUser(item) || item.is_admin || item.is_moderator)).length
+    const coverage = usersTotal > 0 ? Math.round((verified / usersTotal) * 100) : 0
+    return {
+      usersTotal,
+      owners,
+      admins,
+      moderators,
+      verified,
+      banned,
+      warnings,
+      staff,
+      coverage,
+      roles: roleOptions.length,
+      pendingVerification: adminVerificationStatusCounts.pending
+    }
+  }, [adminUsers, adminVerificationStatusCounts.pending, roleOptions.length])
+  const adminUserFilterCounts = useMemo(() => ({
+    all: adminUsers.length,
+    staff: adminUsers.filter((item) => item && (isOwnerUser(item) || item.is_admin || item.is_moderator)).length,
+    risk: adminUsers.filter((item) => item && (item.is_banned || Number(item.warnings_count || 0) > 0)).length,
+    banned: adminUsers.filter((item) => item && item.is_banned).length,
+    verified: adminUsers.filter((item) => item && item.is_verified).length,
+    unverified: adminUsers.filter((item) => item && !item.is_verified).length
+  }), [adminUsers])
+  const adminVisibleUsers = useMemo(() => {
+    const getPriority = (targetUser) => {
+      const warningsCount = Number(targetUser && targetUser.warnings_count ? targetUser.warnings_count : 0)
+      return (
+        (isOwnerUser(targetUser) ? 120 : 0) +
+        (targetUser && targetUser.is_admin ? 56 : 0) +
+        (targetUser && targetUser.is_moderator ? 34 : 0) +
+        (targetUser && targetUser.is_banned ? 24 : 0) +
+        Math.min(18, warningsCount)
+      )
+    }
+    return [...adminUsers]
+      .filter((item) => {
+        if (!item) return false
+        if (adminUserFilter === 'staff') return isOwnerUser(item) || item.is_admin || item.is_moderator
+        if (adminUserFilter === 'risk') return item.is_banned || Number(item.warnings_count || 0) > 0
+        if (adminUserFilter === 'banned') return item.is_banned === true
+        if (adminUserFilter === 'verified') return item.is_verified === true
+        if (adminUserFilter === 'unverified') return item.is_verified !== true
+        return true
+      })
+      .sort((a, b) => {
+        const priorityDiff = getPriority(b) - getPriority(a)
+        if (priorityDiff !== 0) return priorityDiff
+        const warningsDiff = Number(b.warnings_count || 0) - Number(a.warnings_count || 0)
+        if (warningsDiff !== 0) return warningsDiff
+        return String(a.username || '').localeCompare(String(b.username || ''))
+      })
+  }, [adminUsers, adminUserFilter])
+  const adminRiskQueue = useMemo(() => (
+    [...adminUsers]
+      .filter((item) => item && (item.is_banned || Number(item.warnings_count || 0) > 0))
+      .sort((a, b) => {
+        if (Boolean(b.is_banned) !== Boolean(a.is_banned)) return Number(Boolean(b.is_banned)) - Number(Boolean(a.is_banned))
+        const warningsDiff = Number(b.warnings_count || 0) - Number(a.warnings_count || 0)
+        if (warningsDiff !== 0) return warningsDiff
+        return String(a.username || '').localeCompare(String(b.username || ''))
+      })
+      .slice(0, 5)
+  ), [adminUsers])
+  const adminStaffBoard = useMemo(() => (
+    [...adminUsers]
+      .filter((item) => item && (isOwnerUser(item) || item.is_admin || item.is_moderator))
+      .sort((a, b) => {
+        const rankA = (isOwnerUser(a) ? 3 : 0) + (a && a.is_admin ? 2 : 0) + (a && a.is_moderator ? 1 : 0)
+        const rankB = (isOwnerUser(b) ? 3 : 0) + (b && b.is_admin ? 2 : 0) + (b && b.is_moderator ? 1 : 0)
+        if (rankB !== rankA) return rankB - rankA
+        return String(a.username || '').localeCompare(String(b.username || ''))
+      })
+      .slice(0, 6)
+  ), [adminUsers])
+  const adminVerificationSpotlight = useMemo(() => {
+    const pendingItems = adminVerificationRows.filter((item) => item.status === 'pending')
+    if (pendingItems.length > 0) return pendingItems.slice(0, 4)
+    return adminVerificationRows.slice(0, 4)
+  }, [adminVerificationRows])
+  const adminRoleCatalog = useMemo(() => (
+    roleOptions
+      .map((role) => {
+        const members = adminUsers.filter((item) => getUserRoleList(item).includes(role.value))
+        return {
+          ...role,
+          membersCount: members.length,
+          staffCount: members.filter((item) => isOwnerUser(item) || item.is_admin || item.is_moderator).length,
+          previewUsers: members.slice(0, 3).map((item) => `@${item.username}`)
+        }
+      })
+      .sort((a, b) => {
+        if (b.membersCount !== a.membersCount) return b.membersCount - a.membersCount
+        return String(a.label || '').localeCompare(String(b.label || ''))
+      })
+  ), [roleOptions, adminUsers])
+  const adminWorkspaceTabs = useMemo(() => ([
+    { value: 'overview', label: 'Overview', meta: `${adminOverviewStats.staff} staff`, count: adminOverviewStats.usersTotal },
+    { value: 'verification', label: 'Verification', meta: 'requests', count: adminOverviewStats.pendingVerification },
+    { value: 'users', label: 'Users', meta: 'visible', count: adminVisibleUsers.length },
+    { value: 'roles', label: 'Roles', meta: 'catalog', count: adminOverviewStats.roles }
+  ]), [adminOverviewStats.pendingVerification, adminOverviewStats.roles, adminOverviewStats.staff, adminOverviewStats.usersTotal, adminVisibleUsers.length])
   const globalPaletteQueryNormalized = String(globalPaletteQuery || '').trim().toLowerCase()
   const globalPaletteActions = getGlobalPaletteActions()
   const globalPaletteVisibleActions = (globalPaletteQueryNormalized
@@ -13573,7 +13710,333 @@ export default function App() {
             )}
           </div>
         )}        {view === 'admin' && user && user.isAdmin && (
-          <div className="panel admin-panel">
+          <div className="panel admin-panel admin-panel-redesign">
+            <header className="admin-hero">
+              <div className="admin-hero-main">
+                <span className="admin-kicker">Moderation workspace</span>
+                <div className="admin-hero-headline">
+                  <div>
+                    <h2>Admin Control Center</h2>
+                    <p className="admin-hero-copy">
+                      Roles, trust, moderation and security are grouped into one workspace instead of one long list.
+                    </p>
+                  </div>
+                  <span className={`verification-status-badge ${adminOverviewStats.pendingVerification > 0 ? 'pending' : 'approved'}`.trim()}>
+                    {adminOverviewStats.pendingVerification > 0
+                      ? `${adminOverviewStats.pendingVerification} pending`
+                      : 'queue clear'}
+                  </span>
+                </div>
+                <form
+                  className="admin-search admin-search-wide"
+                  onSubmit={(event) => {
+                    event.preventDefault()
+                    refreshAdminWorkspace(adminQuery, adminVerificationFilter)
+                  }}
+                >
+                  <input
+                    type="text"
+                    placeholder="Search by username, then refresh both users and verification queues"
+                    value={adminQuery}
+                    onChange={(event) => setAdminQuery(event.target.value)}
+                  />
+                  <button type="submit" className="primary">Refresh</button>
+                  <button
+                    type="button"
+                    className="ghost"
+                    onClick={() => {
+                      setAdminQuery('')
+                      refreshAdminWorkspace('', adminVerificationFilter)
+                    }}
+                  >
+                    Clear
+                  </button>
+                </form>
+                <div className="admin-stat-grid">
+                  <article className="admin-stat-card tone-core">
+                    <span>Total users</span>
+                    <strong>{adminOverviewStats.usersTotal}</strong>
+                    <small>{adminQuery.trim() ? `filtered by "${adminQuery.trim()}"` : 'loaded from admin search'}</small>
+                  </article>
+                  <article className="admin-stat-card tone-staff">
+                    <span>Staff lane</span>
+                    <strong>{adminOverviewStats.staff}</strong>
+                    <small>{adminOverviewStats.owners} owners, {adminOverviewStats.admins} admins, {adminOverviewStats.moderators} moderators</small>
+                  </article>
+                  <article className="admin-stat-card tone-verify">
+                    <span>Verification</span>
+                    <strong>{adminOverviewStats.pendingVerification}</strong>
+                    <small>{adminOverviewStats.verified} verified, coverage {adminOverviewStats.coverage}%</small>
+                  </article>
+                  <article className="admin-stat-card tone-risk">
+                    <span>Risk queue</span>
+                    <strong>{adminOverviewStats.banned + adminOverviewStats.warnings}</strong>
+                    <small>{adminOverviewStats.banned} banned, {adminOverviewStats.warnings} with warnings</small>
+                  </article>
+                </div>
+              </div>
+              <div className="admin-hero-side">
+                <section className="admin-section-card admin-priority-card">
+                  <div className="admin-section-head">
+                    <div>
+                      <span className="admin-section-kicker">Live queue</span>
+                      <h3>Priority lane</h3>
+                    </div>
+                    <button type="button" className="ghost" onClick={() => setAdminWorkspaceTab('overview')}>
+                      Overview
+                    </button>
+                  </div>
+                  <div className="admin-priority-grid">
+                    <button
+                      type="button"
+                      className="admin-priority-chip"
+                      onClick={() => {
+                        setAdminWorkspaceTab('verification')
+                        setAdminVerificationFilter('pending')
+                        loadAdminVerificationRequests('pending', adminQuery)
+                      }}
+                    >
+                      <strong>{adminOverviewStats.pendingVerification}</strong>
+                      <span>pending verification</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="admin-priority-chip"
+                      onClick={() => {
+                        setAdminWorkspaceTab('users')
+                        setAdminUserFilter('risk')
+                      }}
+                    >
+                      <strong>{adminUserFilterCounts.risk}</strong>
+                      <span>flagged users</span>
+                    </button>
+                  </div>
+                  {adminRiskQueue.length === 0 ? (
+                    <div className="empty small">No active risk items in the loaded set.</div>
+                  ) : (
+                    <div className="admin-mini-list">
+                      {adminRiskQueue.map((item) => (
+                        <button
+                          key={`admin-risk-${item.id}`}
+                          type="button"
+                          className="admin-mini-row"
+                          onClick={() => {
+                            setAdminWorkspaceTab('users')
+                            setAdminUserFilter(item.is_banned ? 'banned' : 'risk')
+                          }}
+                        >
+                          <div>
+                            <strong>@{item.username}</strong>
+                            <span>{item.is_banned ? 'banned account' : `${Number(item.warnings_count || 0)} warnings`}</span>
+                          </div>
+                          <span className={`admin-mini-state ${item.is_banned ? 'danger' : 'warn'}`.trim()}>
+                            {item.is_banned ? 'ban' : 'watch'}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </section>
+                <section className="admin-section-card">
+                  <div className="admin-section-head">
+                    <div>
+                      <span className="admin-section-kicker">Staff board</span>
+                      <h3>Who has elevated access</h3>
+                    </div>
+                    <button
+                      type="button"
+                      className="ghost"
+                      onClick={() => {
+                        setAdminWorkspaceTab('users')
+                        setAdminUserFilter('staff')
+                      }}
+                    >
+                      Open staff
+                    </button>
+                  </div>
+                  {adminStaffBoard.length === 0 ? (
+                    <div className="empty small">No staff accounts in the current result set.</div>
+                  ) : (
+                    <div className="admin-mini-list">
+                      {adminStaffBoard.map((item) => (
+                        <div key={`admin-staff-${item.id}`} className="admin-mini-row static">
+                          <div>
+                            <strong>{item.display_name || item.username}</strong>
+                            <span>@{item.username}</span>
+                          </div>
+                          <div className="admin-badges compact">
+                            {isOwnerUser(item) && <span className="badge owner">OWNER</span>}
+                            {item.is_admin && <span className="badge admin">ADMIN</span>}
+                            {item.is_moderator && <span className="badge moder">MODER</span>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </section>
+              </div>
+            </header>
+
+            <div className="admin-tabbar" role="tablist" aria-label="Admin workspace tabs">
+              {adminWorkspaceTabs.map((tab) => (
+                <button
+                  key={`admin-tab-${tab.value}`}
+                  type="button"
+                  role="tab"
+                  aria-selected={adminWorkspaceTab === tab.value}
+                  className={adminWorkspaceTab === tab.value ? 'active' : ''}
+                  onClick={() => setAdminWorkspaceTab(tab.value)}
+                >
+                  <span>{tab.label}</span>
+                  <small>{tab.meta}</small>
+                  <strong>{tab.count}</strong>
+                </button>
+              ))}
+            </div>
+
+            {adminWorkspaceTab === 'overview' && (
+              <div className="admin-overview-grid">
+                <section className="admin-section-card">
+                  <div className="admin-section-head">
+                    <div>
+                      <span className="admin-section-kicker">Verification</span>
+                      <h3>Incoming requests</h3>
+                    </div>
+                    <button
+                      type="button"
+                      className="ghost"
+                      onClick={() => {
+                        setAdminWorkspaceTab('verification')
+                        setAdminVerificationFilter('pending')
+                        loadAdminVerificationRequests('pending', adminQuery)
+                      }}
+                    >
+                      Review queue
+                    </button>
+                  </div>
+                  {adminVerificationSpotlight.length === 0 ? (
+                    <div className="empty small">No verification requests in the current slice.</div>
+                  ) : (
+                    <div className="admin-overview-stack">
+                      {adminVerificationSpotlight.map((item) => (
+                        <article key={`admin-overview-verification-${item.id}`} className="admin-overview-row">
+                          <div>
+                            <strong>{item.user.displayName || item.user.username}</strong>
+                            <span>@{item.user.username}</span>
+                          </div>
+                          <div className="admin-overview-copy">
+                            <p>{item.reason}</p>
+                            <small>{formatDateTime(item.createdAt) || 'just now'}</small>
+                          </div>
+                          <span className={`verification-status-badge ${item.status}`.trim()}>
+                            {verificationStatusLabelByValue.get(item.status) || item.status}
+                          </span>
+                        </article>
+                      ))}
+                    </div>
+                  )}
+                </section>
+                <section className="admin-section-card">
+                  <div className="admin-section-head">
+                    <div>
+                      <span className="admin-section-kicker">Moderation</span>
+                      <h3>Risk watchlist</h3>
+                    </div>
+                    <button
+                      type="button"
+                      className="ghost"
+                      onClick={() => {
+                        setAdminWorkspaceTab('users')
+                        setAdminUserFilter('risk')
+                      }}
+                    >
+                      Open users
+                    </button>
+                  </div>
+                  {adminRiskQueue.length === 0 ? (
+                    <div className="empty small">No users with bans or warnings right now.</div>
+                  ) : (
+                    <div className="admin-overview-stack">
+                      {adminRiskQueue.map((item) => (
+                        <article key={`admin-overview-risk-${item.id}`} className="admin-overview-row">
+                          <div>
+                            <strong>{item.display_name || item.username}</strong>
+                            <span>@{item.username}</span>
+                          </div>
+                          <div className="admin-overview-copy">
+                            <p>{item.is_banned ? 'Account is currently banned.' : 'Account has active warning history.'}</p>
+                            <small>Warnings: {Number(item.warnings_count || 0)}</small>
+                          </div>
+                          <span className={`admin-mini-state ${item.is_banned ? 'danger' : 'warn'}`.trim()}>
+                            {item.is_banned ? 'ban' : 'warn'}
+                          </span>
+                        </article>
+                      ))}
+                    </div>
+                  )}
+                </section>
+                <section className="admin-section-card">
+                  <div className="admin-section-head">
+                    <div>
+                      <span className="admin-section-kicker">Coverage</span>
+                      <h3>Role catalog snapshot</h3>
+                    </div>
+                    <button type="button" className="ghost" onClick={() => setAdminWorkspaceTab('roles')}>
+                      Open roles
+                    </button>
+                  </div>
+                  <div className="admin-role-catalog-grid compact">
+                    {adminRoleCatalog.slice(0, 6).map((role) => (
+                      <article key={`admin-role-overview-${role.value}`} className="admin-role-card">
+                        <div>
+                          <strong>{role.label}</strong>
+                          <span>{role.value}</span>
+                        </div>
+                        <b>{role.membersCount}</b>
+                        <small>{role.staffCount > 0 ? `${role.staffCount} staff` : 'community role'}</small>
+                      </article>
+                    ))}
+                  </div>
+                </section>
+                <section className="admin-section-card">
+                  <div className="admin-section-head">
+                    <div>
+                      <span className="admin-section-kicker">Access</span>
+                      <h3>Staff roster</h3>
+                    </div>
+                    <button
+                      type="button"
+                      className="ghost"
+                      onClick={() => {
+                        setAdminWorkspaceTab('users')
+                        setAdminUserFilter('staff')
+                      }}
+                    >
+                      Inspect staff
+                    </button>
+                  </div>
+                  {adminStaffBoard.length === 0 ? (
+                    <div className="empty small">No staff in the current result set.</div>
+                  ) : (
+                    <div className="admin-overview-stack">
+                      {adminStaffBoard.map((item) => (
+                        <article key={`admin-overview-staff-${item.id}`} className="admin-overview-row">
+                          <div>
+                            <strong>{item.display_name || item.username}</strong>
+                            <span>@{item.username}</span>
+                          </div>
+                          <div className="admin-badges compact">
+                            {isOwnerUser(item) && <span className="badge owner">OWNER</span>}
+                            {item.is_admin && <span className="badge admin">ADMIN</span>}
+                            {item.is_moderator && <span className="badge moder">MODER</span>}
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+                  )}
+                </section>
+              </div>
+            )}
             <h2>Админ панель</h2>
             <div className="admin-search">
               <input
@@ -13589,7 +14052,8 @@ export default function App() {
                 Найти
               </button>
             </div>
-            <div className="admin-role-manager">
+            {adminWorkspaceTab === 'roles' && (
+            <div className="admin-role-manager admin-stage-card">
               <strong>Управление ролями</strong>
               <div className="admin-role-grid">
                 <input
@@ -13609,7 +14073,9 @@ export default function App() {
                 </button>
               </div>
             </div>
-            <section className="admin-verify-section">
+            )}
+            {adminWorkspaceTab === 'verification' && (
+            <section className="admin-verify-section admin-stage-card">
               <div className="admin-verify-head">
                 <strong>Verification requests</strong>
                 <div className="admin-verify-filters">
@@ -13718,9 +14184,42 @@ export default function App() {
                 </div>
               )}
             </section>
-            <div className="admin-list">
-              {adminUsers.length === 0 && <div className="empty">Пользователи не найдены.</div>}
-              {adminUsers.map((u) => {
+            )}
+            {adminWorkspaceTab === 'users' && (
+              <>
+                <section className="admin-section-card admin-users-toolbar">
+                  <div className="admin-section-head">
+                    <div>
+                      <span className="admin-section-kicker">User operations</span>
+                      <h3>Accounts, access and enforcement</h3>
+                      <p className="admin-section-copy">Filter the queue, then manage roles, trust, warnings and password resets from each card.</p>
+                    </div>
+                    <span className="admin-section-pill">{adminVisibleUsers.length} visible</span>
+                  </div>
+                  <div className="admin-filter-row" role="toolbar" aria-label="Admin user filters">
+                    {[
+                      { value: 'all', label: 'All', count: adminUserFilterCounts.all },
+                      { value: 'staff', label: 'Staff', count: adminUserFilterCounts.staff },
+                      { value: 'risk', label: 'Risk', count: adminUserFilterCounts.risk },
+                      { value: 'banned', label: 'Banned', count: adminUserFilterCounts.banned },
+                      { value: 'verified', label: 'Verified', count: adminUserFilterCounts.verified },
+                      { value: 'unverified', label: 'Unverified', count: adminUserFilterCounts.unverified }
+                    ].map((item) => (
+                      <button
+                        key={`admin-user-filter-${item.value}`}
+                        type="button"
+                        className={adminUserFilter === item.value ? 'active' : ''}
+                        onClick={() => setAdminUserFilter(item.value)}
+                      >
+                        {item.label}
+                        <strong>{item.count}</strong>
+                      </button>
+                    ))}
+                  </div>
+                </section>
+                <div className="admin-list admin-users-grid">
+              {adminVisibleUsers.length === 0 && <div className="empty">Пользователи не найдены.</div>}
+              {adminVisibleUsers.map((u) => {
                 const targetIsOwner = isOwnerUser(u)
                 const canManageTarget = currentUserIsOwner || !targetIsOwner
                 return (
@@ -13871,6 +14370,8 @@ export default function App() {
                 )
               })}
             </div>
+              </>
+            )}
           </div>
         )}
 
