@@ -86,7 +86,24 @@ Security:
 - After push, verify service health (`/api/health`).
 - If feature depends on schema and migration errors appear, apply `server/src/schema.sql`, then restart/redeploy service.
 
-## 6.1) Frontend hosting (REG.RU / ISPmanager)
+## 6.1) Render PostgreSQL connection rules
+
+- Prefer `DATABASE_URL` for production on Render.
+- If `DATABASE_URL` is set, treat `PGHOST`, `PGPORT`, `PGUSER`, `PGPASSWORD`, and `PGDATABASE` as fallback-only local values.
+- For this repo, `server/src/db.js` is expected to prefer `DATABASE_URL` over split `PG*` variables.
+- When the web service and Postgres are in the same Render project/environment/region, use the Postgres `Internal Database URL`.
+- Use the `External Database URL` only as a fallback when internal networking is unavailable or when connecting from outside Render.
+- If deploy logs show `getaddrinfo ENOTFOUND dpg-...`, first check Render database status before changing code.
+- If the Render Postgres instance shows `Free database expired`, backend startup will fail until the database is upgraded or replaced.
+- If replacing an expired database:
+  1. Create a new Render Postgres instance in the same region as the web service.
+  2. Set `DATABASE_URL` in the web service to the new Internal URL.
+  3. Remove stale `PG*` env vars from the web service.
+  4. Redeploy the backend.
+  5. If schema is missing, apply `server/src/schema.sql`.
+- Do not store DB credentials in git or session notes. If credentials were pasted in chat, recommend rotation after recovery.
+
+## 6.2) Frontend hosting (REG.RU / ISPmanager)
 
 Production domain:
 - `configcorner.online`
@@ -248,3 +265,14 @@ If this bug returns, inspect mobile rules around:
 - `ed12cc2` - mobile chat list visibility restore
 - `a249cef` - touch long-press context menus
 - `e66a9f6` - touch context menu UX polish (faster trigger, reduced native callout conflict)
+
+### 12.6 Render DB recovery notes (2026-03-06)
+
+- A failed Render deploy with `getaddrinfo ENOTFOUND dpg-...` was traced to an expired free Render Postgres instance, not to the Node/Express upgrade itself.
+- Recovery path:
+  - create a new free Render Postgres instance in the same region
+  - use the database's Internal URL in the web service `DATABASE_URL`
+  - remove stale `PG*` env vars from the web service
+  - redeploy
+- New backend connection behavior was documented and fixed so `DATABASE_URL` takes precedence over split `PG*` env vars.
+- Frontend deploy to `configcorner.online` was validated by replacing remote hashed assets and confirming `index.html` references the new hashes.
