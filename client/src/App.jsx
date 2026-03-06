@@ -3351,34 +3351,6 @@ export default function App() {
     dashboardLastRefreshAt,
     dashboardRefreshLoading
   ])
-  const dashboardWorkbenchSummary = useMemo(() => {
-    if (dashboardWorkbenchMode === DASHBOARD_WORKBENCH_MODES.social) {
-      return {
-        title: 'Social radar',
-        description: 'Следи за горячей лентой, трендами и вовлечением без лишнего шума.',
-        badge: hotFeedPosts[0] ? `${hotFeedPosts.length} hot posts` : 'quiet stream'
-      }
-    }
-    if (dashboardWorkbenchMode === DASHBOARD_WORKBENCH_MODES.studio) {
-      return {
-        title: 'Studio lane',
-        description: 'Собирай публикации, докручивай профиль и веди заметки в одном месте.',
-        badge: String(postText || '').trim() ? 'draft in progress' : 'ready to publish'
-      }
-    }
-    if (dashboardWorkbenchMode === DASHBOARD_WORKBENCH_MODES.ops) {
-      return {
-        title: 'Ops board',
-        description: 'Контролируй realtime, push и health, пока сервис держится в тонусе.',
-        badge: dashboardSystemAlerts.length > 0 ? `${dashboardSystemAlerts.length} alerts` : 'all systems nominal'
-      }
-    }
-    return {
-      title: 'Focus lane',
-      description: 'Быстрый доступ к приоритетным чатам, свежим задачам и следующему шагу.',
-      badge: unreadConversationCount > 0 ? `${unreadConversationCount} chats need attention` : 'queue is under control'
-    }
-  }, [dashboardWorkbenchMode, hotFeedPosts, postText, dashboardSystemAlerts.length, unreadConversationCount])
   const dashboardMissionSignals = useMemo(() => ([
     {
       id: 'workspace',
@@ -3609,6 +3581,34 @@ export default function App() {
     unreadMessagesCount,
     unreadConversationCount
   ])
+  const dashboardWorkbenchSummary = useMemo(() => {
+    if (dashboardWorkbenchMode === DASHBOARD_WORKBENCH_MODES.social) {
+      return {
+        title: 'Social radar',
+        description: 'Следи за горячей лентой, трендами и вовлечением без лишнего шума.',
+        badge: hotFeedPosts[0] ? `${hotFeedPosts.length} hot posts` : 'quiet stream'
+      }
+    }
+    if (dashboardWorkbenchMode === DASHBOARD_WORKBENCH_MODES.studio) {
+      return {
+        title: 'Studio lane',
+        description: 'Собирай публикации, докручивай профиль и веди заметки в одном месте.',
+        badge: String(postText || '').trim() ? 'draft in progress' : 'ready to publish'
+      }
+    }
+    if (dashboardWorkbenchMode === DASHBOARD_WORKBENCH_MODES.ops) {
+      return {
+        title: 'Ops board',
+        description: 'Контролируй realtime, push и health, пока сервис держится в тонусе.',
+        badge: dashboardSystemAlerts.length > 0 ? `${dashboardSystemAlerts.length} alerts` : 'all systems nominal'
+      }
+    }
+    return {
+      title: 'Focus lane',
+      description: 'Быстрый доступ к приоритетным чатам, свежим задачам и следующему шагу.',
+      badge: unreadConversationCount > 0 ? `${unreadConversationCount} chats need attention` : 'queue is under control'
+    }
+  }, [dashboardWorkbenchMode, hotFeedPosts, postText, dashboardSystemAlerts.length, unreadConversationCount])
   const dashboardFocusQueue = useMemo(() => {
     const queue = []
     if (dashboardDraftQueue.length > 0) {
