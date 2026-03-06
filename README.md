@@ -69,6 +69,8 @@ JWT_SECRET=strong_secret
 CORS_ORIGIN=http://localhost:5173
 ```
 
+`DATABASE_URL` is the preferred production setting. If you use it, `PGHOST`, `PGPORT`, `PGUSER`, `PGPASSWORD`, and `PGDATABASE` should be treated as fallback-only local values.
+
 For web push (optional):
 
 ```env
