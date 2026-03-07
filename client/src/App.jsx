@@ -94,6 +94,11 @@ const icons = {
       <path d="M4 4h7v7H4V4Zm9 0h7v4h-7V4ZM4 13h4v7H4v-7Zm6 0h10v7H10v-7Zm5-4h5v2h-5V9Zm-4 0h2v2h-2V9Z" />
     </svg>
   ),
+  pulse: (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M3 12h4l2.2-5.2a1 1 0 0 1 1.86.08L13.4 15l2.08-3.47a1 1 0 0 1 .86-.49H21v2h-4.1l-2.9 4.84a1 1 0 0 1-1.83-.19l-2.1-7.36-1.16 2.76A1 1 0 0 1 8 14H3v-2Z" />
+    </svg>
+  ),
   feed: (
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path d="M5 4h14a2 2 0 0 1 2 2v2H3V6a2 2 0 0 1 2-2Zm-2 8h18v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-6Zm4 2h6v2H7v-2Z" />
@@ -284,6 +289,14 @@ function extractHashtags(text) {
     .filter(Boolean)
 }
 
+function extractMentions(text) {
+  if (typeof text !== 'string' || !text.trim()) return []
+  const matches = text.match(/@[a-zA-Z0-9_]+/g) || []
+  return matches
+    .map((item) => item.toLowerCase())
+    .filter(Boolean)
+}
+
 function extractUrls(text) {
   if (typeof text !== 'string' || !text.trim()) return []
   const matches = text.match(/https?:\/\/[^\s<>"']+/gi) || []
@@ -347,6 +360,22 @@ function formatRelativeFeedAge(value) {
   return formatDate(value)
 }
 
+function truncateText(value, maxLength = 120) {
+  const text = String(value || '').trim()
+  if (!text) return ''
+  if (text.length <= maxLength) return text
+  return `${text.slice(0, Math.max(0, maxLength - 3)).trimEnd()}...`
+}
+
+function getFeedPostPreview(post, fallback = 'Post') {
+  if (!post || typeof post !== 'object') return fallback
+  const body = truncateText(post.body, 140)
+  if (body) return body
+  if (post.repostOf) return 'Repost without comment'
+  if (post.imageUrl) return 'Media post'
+  return fallback
+}
+
 function renderHighlightedText(value, query) {
   const text = String(value || '')
   const normalizedQuery = String(query || '').trim()
@@ -404,6 +433,8 @@ const DASHBOARD_PREFERENCES_STORAGE_KEY = 'ktk_dashboard_preferences_v1'
 const DASHBOARD_COMMAND_HISTORY_STORAGE_KEY = 'ktk_dashboard_command_history_v1'
 const DASHBOARD_SCRATCHPAD_STORAGE_KEY = 'ktk_dashboard_scratchpad_v1'
 const FEED_COMPOSER_DRAFT_STORAGE_KEY = 'ktk_feed_composer_draft_v1'
+const PULSE_DISMISSED_STORAGE_KEY = 'ktk_pulse_dismissed_v1'
+const PULSE_PINNED_STORAGE_KEY = 'ktk_pulse_pinned_v1'
 const CHAT_WALLPAPER_STORAGE_KEY = 'ktk_chat_wallpapers'
 const CHAT_ALIAS_STORAGE_KEY = 'ktk_chat_aliases'
 const RECENT_STICKERS_STORAGE_KEY = 'ktk_recent_stickers'
@@ -426,11 +457,45 @@ const DASHBOARD_WORKBENCH_MODE_OPTIONS = [
   { value: DASHBOARD_WORKBENCH_MODES.ops, label: 'Ops', hint: 'signals + sync' }
 ]
 
+const PULSE_TABS = {
+  all: 'all',
+  priority: 'priority',
+  chats: 'chats',
+  feed: 'feed',
+  profile: 'profile',
+  system: 'system',
+  pinned: 'pinned',
+  archived: 'archived'
+}
+
+const PULSE_TAB_OPTIONS = [
+  { value: PULSE_TABS.all, label: 'All', hint: 'full queue' },
+  { value: PULSE_TABS.priority, label: 'Priority', hint: 'top actions' },
+  { value: PULSE_TABS.chats, label: 'Chats', hint: 'replies + drafts' },
+  { value: PULSE_TABS.feed, label: 'Feed', hint: 'trends + mentions' },
+  { value: PULSE_TABS.profile, label: 'Profile', hint: 'growth tasks' },
+  { value: PULSE_TABS.system, label: 'System', hint: 'health + alerts' },
+  { value: PULSE_TABS.pinned, label: 'Pinned', hint: 'saved focus' },
+  { value: PULSE_TABS.archived, label: 'Done', hint: 'resolved items' }
+]
+const PULSE_LANE_LABELS = {
+  [PULSE_TABS.chats]: 'Chats',
+  [PULSE_TABS.feed]: 'Feed',
+  [PULSE_TABS.profile]: 'Profile',
+  [PULSE_TABS.system]: 'System'
+}
+const PULSE_PRIORITY_THRESHOLD = 80
+
 function normalizeDashboardWorkbenchMode(value) {
   const normalized = String(value || '').trim().toLowerCase()
   return Object.values(DASHBOARD_WORKBENCH_MODES).includes(normalized)
     ? normalized
     : DASHBOARD_WORKBENCH_MODES.focus
+}
+
+function normalizePulseTab(value) {
+  const normalized = String(value || '').trim().toLowerCase()
+  return Object.values(PULSE_TABS).includes(normalized) ? normalized : PULSE_TABS.all
 }
 const MEDIA_PANEL_TABS = {
   emoji: 'emoji',
@@ -2058,6 +2123,30 @@ export default function App() {
     }
   })
   const [dashboardLastRefreshAt, setDashboardLastRefreshAt] = useState(null)
+  const [pulseTab, setPulseTab] = useState(PULSE_TABS.all)
+  const [pulseQuery, setPulseQuery] = useState('')
+  const [pulseDismissedItemIds, setPulseDismissedItemIds] = useState(() => {
+    if (typeof window === 'undefined') return []
+    try {
+      const parsed = JSON.parse(localStorage.getItem(PULSE_DISMISSED_STORAGE_KEY) || '[]')
+      return Array.isArray(parsed)
+        ? parsed.map((item) => String(item || '').trim()).filter(Boolean).slice(0, 200)
+        : []
+    } catch (err) {
+      return []
+    }
+  })
+  const [pulsePinnedItemIds, setPulsePinnedItemIds] = useState(() => {
+    if (typeof window === 'undefined') return []
+    try {
+      const parsed = JSON.parse(localStorage.getItem(PULSE_PINNED_STORAGE_KEY) || '[]')
+      return Array.isArray(parsed)
+        ? parsed.map((item) => String(item || '').trim()).filter(Boolean).slice(0, 80)
+        : []
+    } catch (err) {
+      return []
+    }
+  })
   const [feedExplorer, setFeedExplorer] = useState(() => {
     try {
       const parsed = JSON.parse(localStorage.getItem(FEED_EXPLORER_STORAGE_KEY) || '{}')
@@ -3724,6 +3813,334 @@ export default function App() {
   const dashboardLastRefreshLabel = dashboardLastRefreshAt
     ? `${formatTime(dashboardLastRefreshAt)}`
     : 'еще не обновлялось'
+  const pulseDismissedIdSet = useMemo(() => (
+    new Set(pulseDismissedItemIds.map((item) => String(item || '').trim()).filter(Boolean))
+  ), [pulseDismissedItemIds])
+  const pulsePinnedIdSet = useMemo(() => (
+    new Set(pulsePinnedItemIds.map((item) => String(item || '').trim()).filter(Boolean))
+  ), [pulsePinnedItemIds])
+  const pulseMentionPosts = useMemo(() => {
+    if (!user || !user.username) return []
+    const targetMention = `@${String(user.username || '').trim().toLowerCase()}`
+    if (!targetMention || targetMention === '@') return []
+    return [...posts]
+      .filter((post) => {
+        if (!post || !post.id) return false
+        if (post.author && user.id && post.author.id === user.id) return false
+        return extractMentions(post.body).includes(targetMention)
+      })
+      .sort((a, b) => (Date.parse(b.createdAt || '') || 0) - (Date.parse(a.createdAt || '') || 0))
+      .slice(0, 4)
+  }, [posts, user ? user.id : null, user ? user.username : ''])
+  const pulseRawItems = useMemo(() => {
+    const items = []
+
+    dashboardTopConversations
+      .filter((conversation) => conversation.unreadCount > 0)
+      .slice(0, 5)
+      .forEach((conversation, index) => {
+        items.push({
+          id: `chat-unread-${conversation.id}`,
+          lane: PULSE_TABS.chats,
+          priority: Math.min(98, 84 + Math.min(12, conversation.unreadCount * 2) - index),
+          title: conversation.title,
+          text: truncateText(conversation.lastMessage || 'Open the conversation and continue the thread.', 120),
+          timestamp: conversation.lastAt || null,
+          meta: `${conversation.unreadCount} unread`,
+          actionId: 'open-conversation',
+          payload: { conversationId: conversation.id },
+          cta: 'Open chat',
+          tone: conversation.unreadCount >= 4 ? 'warn' : 'accent',
+          badges: [
+            'Unread',
+            conversation.online ? 'Online' : '',
+            conversation.isFavorite ? 'Pinned chat' : ''
+          ].filter(Boolean)
+        })
+      })
+
+    dashboardDraftQueue.forEach((conversation, index) => {
+      items.push({
+        id: `chat-draft-${conversation.id}`,
+        lane: PULSE_TABS.chats,
+        priority: 74 - index,
+        title: `Draft in ${conversation.title}`,
+        text: truncateText(conversation.draftText || 'Resume the saved draft.', 120),
+        timestamp: conversation.lastAt || null,
+        meta: 'Local draft',
+        actionId: 'open-conversation',
+        payload: { conversationId: conversation.id },
+        cta: 'Resume draft',
+        tone: 'neutral',
+        badges: ['Draft']
+      })
+    })
+
+    if (String(postText || '').trim()) {
+      items.push({
+        id: 'feed-composer-draft',
+        lane: PULSE_TABS.feed,
+        priority: 72,
+        title: 'Feed draft is waiting',
+        text: truncateText(postText, 130),
+        timestamp: feedComposerDraftSavedAt || null,
+        meta: feedComposerDraftSavedAt ? `Saved ${formatRelativeFeedAge(feedComposerDraftSavedAt)}` : 'Saved locally',
+        actionId: 'open-compose',
+        payload: null,
+        cta: 'Resume draft',
+        tone: 'accent',
+        badges: [`${String(postText || '').trim().length} chars`]
+      })
+    }
+
+    hotFeedPosts.slice(0, 4).forEach((entry, index) => {
+      const post = entry && entry.post ? entry.post : null
+      if (!post || !post.id) return
+      const authorLabel = post.author?.displayName || post.author?.username || 'Author'
+      items.push({
+        id: `feed-hot-${post.id}`,
+        lane: PULSE_TABS.feed,
+        priority: Math.max(68, 86 - (index * 3)),
+        title: `Hot feed: ${authorLabel}`,
+        text: getFeedPostPreview(post, 'Open the hot lane in feed.'),
+        timestamp: post.createdAt || null,
+        meta: `${entry.score} pts engagement`,
+        actionId: 'open-feed-hot',
+        payload: { authorId: post.author?.id || '' },
+        cta: 'Open feed',
+        tone: 'accent',
+        badges: [
+          (extractHashtags(post.body)[0] || '').trim(),
+          post.imageUrl ? 'Media' : ''
+        ].filter(Boolean)
+      })
+    })
+
+    pulseMentionPosts.forEach((post, index) => {
+      const authorLabel = post.author?.displayName || post.author?.username || 'Author'
+      items.push({
+        id: `feed-mention-${post.id}`,
+        lane: PULSE_TABS.feed,
+        priority: Math.max(70, 83 - (index * 3)),
+        title: `Mention from ${authorLabel}`,
+        text: getFeedPostPreview(post, 'You were mentioned in feed.'),
+        timestamp: post.createdAt || null,
+        meta: 'Mention detected',
+        actionId: 'open-feed-query',
+        payload: { query: `@${user.username}` },
+        cta: 'See mentions',
+        tone: 'warn',
+        badges: ['Mention']
+      })
+    })
+
+    if (trendingTags[0]) {
+      items.push({
+        id: `feed-trend-${trendingTags[0].tag}`,
+        lane: PULSE_TABS.feed,
+        priority: 66,
+        title: `Trend ${trendingTags[0].tag}`,
+        text: `${trendingTags[0].count} posts are riding this topic right now.`,
+        timestamp: posts[0] ? posts[0].createdAt || null : null,
+        meta: 'Trending tag',
+        actionId: 'open-feed-tag',
+        payload: { tag: trendingTags[0].tag },
+        cta: 'Open trend',
+        tone: 'neutral',
+        badges: ['Trend']
+      })
+    }
+
+    if (bookmarkedPostIds.size > 0) {
+      items.push({
+        id: 'feed-bookmarks',
+        lane: PULSE_TABS.feed,
+        priority: 54,
+        title: 'Review saved posts',
+        text: `${bookmarkedPostIds.size} bookmarked posts are ready for a second pass.`,
+        timestamp: null,
+        meta: 'Bookmarks',
+        actionId: 'open-feed-bookmarks',
+        payload: null,
+        cta: 'Open bookmarks',
+        tone: 'neutral',
+        badges: ['Library']
+      })
+    }
+
+    profileEditorPendingChecklist.slice(0, 3).forEach((item, index) => {
+      items.push({
+        id: `profile-task-${item.id}`,
+        lane: PULSE_TABS.profile,
+        priority: Math.max(58, 76 - (index * 3)),
+        title: `Profile lab: ${item.label}`,
+        text: 'Complete this step to raise profile readiness and polish your public card.',
+        timestamp: null,
+        meta: `${profileEditorScore}% ready`,
+        actionId: 'open-profile',
+        payload: null,
+        cta: 'Open profile',
+        tone: 'accent',
+        badges: ['Profile']
+      })
+    })
+
+    if (verificationRequest && verificationRequest.status === 'pending') {
+      items.push({
+        id: 'profile-verification-pending',
+        lane: PULSE_TABS.profile,
+        priority: 60,
+        title: 'Verification request is under review',
+        text: verificationRequest.reason || 'Admins are reviewing your verification request.',
+        timestamp: verificationRequest.updatedAt || verificationRequest.createdAt || null,
+        meta: 'Verification',
+        actionId: 'open-profile',
+        payload: null,
+        cta: 'Open profile',
+        tone: 'neutral',
+        badges: ['Verification']
+      })
+    }
+
+    dashboardSystemAlerts.forEach((item, index) => {
+      const mappedAction = item.id === 'unread'
+        ? { actionId: 'open-unread', payload: null }
+        : item.id === 'blocked'
+          ? { actionId: 'open-settings', payload: { section: 'privacy' } }
+          : item.id === 'call'
+            ? { actionId: 'open-chats', payload: null }
+            : item.id === 'push-error' || item.id === 'push-off'
+              ? { actionId: 'open-settings', payload: { section: 'notifications' } }
+              : { actionId: 'open-dashboard', payload: null }
+      items.push({
+        id: `system-alert-${item.id}`,
+        lane: PULSE_TABS.system,
+        priority: item.level === 'danger' ? 95 - index : item.level === 'warn' ? 86 - index : 68 - index,
+        title: item.title,
+        text: truncateText(item.text, 130),
+        timestamp: dashboardLastRefreshAt || null,
+        meta: item.level,
+        actionId: mappedAction.actionId,
+        payload: mappedAction.payload,
+        cta: 'Open',
+        tone: item.level,
+        badges: ['System']
+      })
+    })
+
+    const snapshotAgeMs = dashboardLastRefreshAt ? Math.max(0, Date.now() - dashboardLastRefreshAt) : Number.POSITIVE_INFINITY
+    if (snapshotAgeMs > (15 * 60 * 1000)) {
+      items.push({
+        id: 'system-refresh-stale',
+        lane: PULSE_TABS.system,
+        priority: 64,
+        title: 'Workspace snapshot is stale',
+        text: dashboardLastRefreshAt
+          ? `Last sync was ${formatRelativeFeedAge(dashboardLastRefreshAt)}. Refresh the workspace snapshot.`
+          : 'This workspace has not been synced yet.',
+        timestamp: dashboardLastRefreshAt || null,
+        meta: 'Sync',
+        actionId: 'refresh-workspace',
+        payload: null,
+        cta: 'Refresh',
+        tone: 'neutral',
+        badges: ['Sync']
+      })
+    }
+
+    if (health && health.ok === false) {
+      items.push({
+        id: 'system-health',
+        lane: PULSE_TABS.system,
+        priority: 93,
+        title: 'Backend health needs attention',
+        text: 'Health check is not green. Verify service status and recent deploys.',
+        timestamp: dashboardLastRefreshAt || null,
+        meta: 'Health',
+        actionId: 'open-dashboard',
+        payload: null,
+        cta: 'Open dashboard',
+        tone: 'danger',
+        badges: ['Health']
+      })
+    }
+
+    return items.sort((a, b) => {
+      if (b.priority !== a.priority) return b.priority - a.priority
+      return (Date.parse(b.timestamp || '') || 0) - (Date.parse(a.timestamp || '') || 0)
+    })
+  }, [
+    dashboardTopConversations,
+    dashboardDraftQueue,
+    postText,
+    feedComposerDraftSavedAt,
+    hotFeedPosts,
+    pulseMentionPosts,
+    trendingTags,
+    posts,
+    bookmarkedPostIds.size,
+    profileEditorPendingChecklist,
+    profileEditorScore,
+    verificationRequest,
+    dashboardSystemAlerts,
+    dashboardLastRefreshAt,
+    health && health.ok,
+    user ? user.username : ''
+  ])
+  const pulseActiveItems = useMemo(() => (
+    pulseRawItems.filter((item) => !pulseDismissedIdSet.has(item.id))
+  ), [pulseRawItems, pulseDismissedIdSet])
+  const pulseArchivedItems = useMemo(() => (
+    pulseRawItems.filter((item) => pulseDismissedIdSet.has(item.id))
+  ), [pulseRawItems, pulseDismissedIdSet])
+  const pulseTabCounts = useMemo(() => ({
+    [PULSE_TABS.all]: pulseActiveItems.length,
+    [PULSE_TABS.priority]: pulseActiveItems.filter((item) => item.priority >= PULSE_PRIORITY_THRESHOLD).length,
+    [PULSE_TABS.chats]: pulseActiveItems.filter((item) => item.lane === PULSE_TABS.chats).length,
+    [PULSE_TABS.feed]: pulseActiveItems.filter((item) => item.lane === PULSE_TABS.feed).length,
+    [PULSE_TABS.profile]: pulseActiveItems.filter((item) => item.lane === PULSE_TABS.profile).length,
+    [PULSE_TABS.system]: pulseActiveItems.filter((item) => item.lane === PULSE_TABS.system).length,
+    [PULSE_TABS.pinned]: pulseActiveItems.filter((item) => pulsePinnedIdSet.has(item.id)).length,
+    [PULSE_TABS.archived]: pulseArchivedItems.length
+  }), [pulseActiveItems, pulseArchivedItems.length, pulsePinnedIdSet])
+  const pulseQueryNormalized = String(pulseQuery || '').trim().toLowerCase()
+  const pulseVisibleItems = useMemo(() => {
+    const source = pulseTab === PULSE_TABS.archived ? pulseArchivedItems : pulseActiveItems
+    let nextItems = source
+    if (pulseTab === PULSE_TABS.priority) {
+      nextItems = source.filter((item) => item.priority >= PULSE_PRIORITY_THRESHOLD)
+    } else if (pulseTab === PULSE_TABS.pinned) {
+      nextItems = source.filter((item) => pulsePinnedIdSet.has(item.id))
+    } else if (pulseTab !== PULSE_TABS.all && pulseTab !== PULSE_TABS.archived) {
+      nextItems = source.filter((item) => item.lane === pulseTab)
+    }
+    if (pulseQueryNormalized) {
+      nextItems = nextItems.filter((item) => (
+        `${item.title} ${item.text} ${item.meta || ''} ${item.lane} ${(item.badges || []).join(' ')}`
+          .toLowerCase()
+          .includes(pulseQueryNormalized)
+      ))
+    }
+    return [...nextItems].sort((a, b) => {
+      const pinDiff = Number(pulsePinnedIdSet.has(b.id)) - Number(pulsePinnedIdSet.has(a.id))
+      if (pinDiff !== 0 && pulseTab !== PULSE_TABS.archived) return pinDiff
+      if (b.priority !== a.priority) return b.priority - a.priority
+      return (Date.parse(b.timestamp || '') || 0) - (Date.parse(a.timestamp || '') || 0)
+    })
+  }, [pulseTab, pulseArchivedItems, pulseActiveItems, pulsePinnedIdSet, pulseQueryNormalized])
+  const pulsePriorityItems = useMemo(() => (
+    pulseActiveItems.filter((item) => item.priority >= PULSE_PRIORITY_THRESHOLD).slice(0, 3)
+  ), [pulseActiveItems])
+  const pulsePinnedPreviewItems = useMemo(() => (
+    pulseActiveItems.filter((item) => pulsePinnedIdSet.has(item.id)).slice(0, 4)
+  ), [pulseActiveItems, pulsePinnedIdSet])
+  const pulsePriorityCount = pulseTabCounts[PULSE_TABS.priority] || 0
+  const pulseWorkspaceHealth = pulsePriorityCount > 0
+    ? 'Attention'
+    : pulseActiveItems.length > 0
+      ? 'Stable'
+      : 'Clear'
+  const pulseResolvedCount = pulseTabCounts[PULSE_TABS.archived] || 0
   const scrollChatToBottom = (behavior = 'auto') => {
     const container = chatMessagesRef.current
     if (!container) return
@@ -4743,7 +5160,7 @@ export default function App() {
   const readStoredView = (isAdmin) => {
     try {
       const stored = localStorage.getItem('ktk_view')
-      const allowed = ['dashboard', 'feed', 'chats', 'profile', 'settings']
+      const allowed = ['dashboard', 'pulse', 'feed', 'chats', 'profile', 'settings']
       if (isAdmin) allowed.push('admin')
       return stored && allowed.includes(stored) ? stored : 'feed'
     } catch (err) {
@@ -4873,7 +5290,7 @@ export default function App() {
 
   useEffect(() => {
     if (!user) return
-    const allowed = ['dashboard', 'feed', 'chats', 'profile', 'settings']
+    const allowed = ['dashboard', 'pulse', 'feed', 'chats', 'profile', 'settings']
     if (user.isAdmin) allowed.push('admin')
     if (allowed.includes(view)) {
       try {
@@ -5131,6 +5548,28 @@ export default function App() {
       // ignore storage errors
     }
   }, [dashboardScratchpad])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        PULSE_DISMISSED_STORAGE_KEY,
+        JSON.stringify(pulseDismissedItemIds.slice(0, 200))
+      )
+    } catch (err) {
+      // ignore storage errors
+    }
+  }, [pulseDismissedItemIds])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        PULSE_PINNED_STORAGE_KEY,
+        JSON.stringify(pulsePinnedItemIds.slice(0, 80))
+      )
+    } catch (err) {
+      // ignore storage errors
+    }
+  }, [pulsePinnedItemIds])
 
   useEffect(() => {
     try {
@@ -7839,6 +8278,11 @@ export default function App() {
     setChatMobilePane(pane)
   }
 
+  const openPulseWorkspace = (tab = PULSE_TABS.all) => {
+    setView('pulse')
+    setPulseTab(normalizePulseTab(tab))
+  }
+
   const openFeedFocus = ({
     filter = FEED_FILTERS.all,
     tag = '',
@@ -7948,6 +8392,10 @@ export default function App() {
     }
     if (actionId === 'settings') {
       setView('settings')
+      return
+    }
+    if (actionId === 'pulse') {
+      openPulseWorkspace(PULSE_TABS.priority)
       return
     }
     if (actionId === 'chats') {
@@ -8123,6 +8571,11 @@ export default function App() {
       setDashboardCommandInput('')
       return
     }
+    if (value === 'pulse' || value === 'activity' || value === 'inbox') {
+      openPulseWorkspace()
+      setDashboardCommandInput('')
+      return
+    }
     if (value === 'profile' || value === 'профиль') {
       setView('profile')
       setDashboardCommandInput('')
@@ -8196,6 +8649,13 @@ export default function App() {
         hint: 'Панель с быстрыми действиями',
         keywords: 'dashboard панель центр',
         run: () => setView('dashboard')
+      },
+      {
+        id: 'go-pulse',
+        title: 'Open Pulse workspace',
+        hint: 'Inbox, priorities, triage board',
+        keywords: 'pulse activity inbox tasks focus',
+        run: () => openPulseWorkspace()
       },
       {
         id: 'go-feed',
@@ -8323,6 +8783,115 @@ export default function App() {
     if (query) {
       closeGlobalPalette()
       runDashboardCommand(query)
+    }
+  }
+
+  const openSettingsSectionView = (section = 'general') => {
+    setSettingsSection(section)
+    setView('settings')
+  }
+
+  const togglePulsePin = (itemId) => {
+    const key = String(itemId || '').trim()
+    if (!key) return
+    setPulsePinnedItemIds((prev) => {
+      if (prev.includes(key)) {
+        return prev.filter((item) => item !== key)
+      }
+      return [key, ...prev.filter((item) => item !== key)].slice(0, 80)
+    })
+  }
+
+  const dismissPulseItem = (itemId) => {
+    const key = String(itemId || '').trim()
+    if (!key) return
+    setPulseDismissedItemIds((prev) => (
+      prev.includes(key) ? prev : [key, ...prev].slice(0, 200)
+    ))
+  }
+
+  const restorePulseItem = (itemId) => {
+    const key = String(itemId || '').trim()
+    if (!key) return
+    setPulseDismissedItemIds((prev) => prev.filter((item) => item !== key))
+  }
+
+  const restoreAllPulseItems = () => {
+    setPulseDismissedItemIds([])
+  }
+
+  const runPulseAction = (item) => {
+    if (!item || !item.actionId) return
+    const payload = item.payload && typeof item.payload === 'object' ? item.payload : {}
+    if (item.actionId === 'open-conversation') {
+      const conversationId = String(payload.conversationId || '').trim()
+      const nextConversation = conversations.find((entry) => entry.id === conversationId)
+      if (nextConversation) {
+        openConversationFromDashboard(nextConversation)
+        return
+      }
+      setView('chats')
+      setChatMobilePane('list')
+      setStatus({ type: 'info', message: 'Conversation was not found in the current list.' })
+      return
+    }
+    if (item.actionId === 'open-feed-hot') {
+      openFeedFocus({
+        filter: FEED_FILTERS.popular,
+        sortMode: FEED_SORT_MODES.engagement,
+        timeWindow: FEED_TIME_WINDOWS.week,
+        authorId: payload.authorId || ''
+      })
+      return
+    }
+    if (item.actionId === 'open-feed-query') {
+      openFeedFocus({
+        filter: FEED_FILTERS.all,
+        sortMode: FEED_SORT_MODES.smart,
+        query: payload.query || ''
+      })
+      return
+    }
+    if (item.actionId === 'open-feed-tag') {
+      openFeedFocus({
+        filter: FEED_FILTERS.all,
+        sortMode: FEED_SORT_MODES.smart,
+        tag: payload.tag || ''
+      })
+      return
+    }
+    if (item.actionId === 'open-feed-bookmarks') {
+      openFeedFocus({ filter: FEED_FILTERS.bookmarks })
+      return
+    }
+    if (item.actionId === 'open-compose') {
+      applyFeedComposerPrompt('', { replace: false })
+      return
+    }
+    if (item.actionId === 'open-profile') {
+      setView('profile')
+      return
+    }
+    if (item.actionId === 'open-settings') {
+      openSettingsSectionView(payload.section || 'general')
+      return
+    }
+    if (item.actionId === 'refresh-workspace') {
+      refreshWorkspaceSnapshot()
+      return
+    }
+    if (item.actionId === 'open-dashboard') {
+      setView('dashboard')
+      return
+    }
+    if (item.actionId === 'open-unread') {
+      runDashboardFocusAction('unread')
+      return
+    }
+    if (item.actionId === 'open-chats') {
+      setView('chats')
+      setChatMobilePane('list')
+      return
     }
   }
 
@@ -10548,6 +11117,17 @@ export default function App() {
             {user ? (
               <button
                 type="button"
+                className={`pulse-toggle ${view === 'pulse' ? 'active' : ''}`.trim()}
+                onClick={() => openPulseWorkspace()}
+                title="Pulse workspace"
+              >
+                <span>{pulsePriorityCount > 99 ? '99+' : pulsePriorityCount}</span>
+                Pulse
+              </button>
+            ) : null}
+            {user ? (
+              <button
+                type="button"
                 className="command-toggle"
                 onClick={openGlobalPalette}
                 title="Командная палитра (Ctrl+K)"
@@ -10702,6 +11282,18 @@ export default function App() {
               title="Панель"
             >
               {icons.dashboard}
+            </button>
+            <button
+              type="button"
+              className={view === 'pulse' ? 'active' : ''}
+              onClick={() => openPulseWorkspace()}
+              title="Pulse"
+              aria-label={pulsePriorityCount > 0 ? `Pulse, priority items: ${pulsePriorityCount}` : 'Pulse'}
+            >
+              {icons.pulse}
+              {pulsePriorityCount > 0 && (
+                <span className="icon-rail-badge">{pulsePriorityCount > 99 ? '99+' : pulsePriorityCount}</span>
+              )}
             </button>
             <button
               type="button"
@@ -11072,7 +11664,7 @@ export default function App() {
               <div className="dashboard-card-head">
                 <div>
                   <strong>Командная строка</strong>
-                  <span>команды: unread, drafts, hot, compose, mine, bookmarks, profile, chats, feed, refresh, push, mode:focus, #тег, @автор</span>
+                  <span>команды: unread, drafts, hot, pulse, compose, mine, bookmarks, profile, chats, feed, refresh, push, mode:focus, #тег, @автор</span>
                 </div>
               </div>
               <div className="dashboard-command-row">
@@ -11139,6 +11731,9 @@ export default function App() {
                   </button>
                   <button type="button" className="ghost" onClick={() => runDashboardWorkbenchAction('bookmarks')}>
                     Закладки
+                  </button>
+                  <button type="button" className="ghost" onClick={() => openPulseWorkspace(PULSE_TABS.priority)}>
+                    Pulse
                   </button>
                   <button type="button" className="ghost" onClick={() => runDashboardWorkbenchAction('settings')}>
                     Настройки
@@ -11333,6 +11928,252 @@ export default function App() {
                   )}
                 </article>
               )}
+            </div>
+          </div>
+        )}
+
+        {view === 'pulse' && user && (
+          <div className="pulse-layout">
+            <section className="pulse-hero">
+              <div className="pulse-hero-main">
+                <span className="pulse-kicker">Activity workspace</span>
+                <h2>Pulse</h2>
+                <p>One board for unread chats, feed signals, profile tasks and system attention points.</p>
+                <div className="pulse-hero-stats">
+                  <article>
+                    <span>Health</span>
+                    <strong>{pulseWorkspaceHealth}</strong>
+                  </article>
+                  <article>
+                    <span>Open queue</span>
+                    <strong>{pulseActiveItems.length}</strong>
+                  </article>
+                  <article>
+                    <span>Priority</span>
+                    <strong>{pulsePriorityCount}</strong>
+                  </article>
+                  <article>
+                    <span>Resolved</span>
+                    <strong>{pulseResolvedCount}</strong>
+                  </article>
+                </div>
+              </div>
+              <div className="pulse-hero-actions">
+                <label className="pulse-search">
+                  <span>Search</span>
+                  <input
+                    type="text"
+                    value={pulseQuery}
+                    onChange={(event) => setPulseQuery(event.target.value)}
+                    placeholder="Filter by title, lane or detail"
+                  />
+                </label>
+                <div className="pulse-hero-buttons">
+                  <button type="button" className="ghost" onClick={() => openPulseWorkspace(PULSE_TABS.priority)}>
+                    Priority
+                  </button>
+                  <button type="button" className="ghost" onClick={() => runDashboardFocusAction('unread')}>
+                    Unread chats
+                  </button>
+                  <button type="button" className="ghost" onClick={() => runDashboardWorkbenchAction('compose')}>
+                    Compose
+                  </button>
+                  <button type="button" className="primary" onClick={refreshWorkspaceSnapshot} disabled={dashboardRefreshLoading}>
+                    {dashboardRefreshLoading ? 'Syncing...' : 'Sync pulse'}
+                  </button>
+                </div>
+              </div>
+            </section>
+
+            <section className="pulse-tabs" role="tablist" aria-label="Pulse filters">
+              {PULSE_TAB_OPTIONS.map((item) => (
+                <button
+                  key={`pulse-tab-${item.value}`}
+                  type="button"
+                  role="tab"
+                  aria-selected={pulseTab === item.value}
+                  className={pulseTab === item.value ? 'active' : ''}
+                  onClick={() => setPulseTab(item.value)}
+                >
+                  <strong>{item.label}</strong>
+                  <small>{item.hint}</small>
+                  <span>{pulseTabCounts[item.value] || 0}</span>
+                </button>
+              ))}
+            </section>
+
+            <section className="pulse-focus-strip" aria-label="Priority lane">
+              {pulsePriorityItems.length === 0 ? (
+                <div className="pulse-empty-note">Priority lane is clear. Use Pulse as a calmer overview board.</div>
+              ) : (
+                pulsePriorityItems.map((item) => (
+                  <article key={`pulse-focus-${item.id}`} className={`pulse-focus-card tone-${item.tone}`.trim()}>
+                    <span>{PULSE_LANE_LABELS[item.lane] || item.lane}</span>
+                    <strong>{item.title}</strong>
+                    <p>{truncateText(item.text, 96)}</p>
+                    <button type="button" className="ghost" onClick={() => runPulseAction(item)}>
+                      {item.cta}
+                    </button>
+                  </article>
+                ))
+              )}
+            </section>
+
+            <div className="pulse-grid">
+              <aside className="pulse-sidebar">
+                <article className="pulse-side-card">
+                  <div className="pulse-card-head">
+                    <div>
+                      <strong>Lane mix</strong>
+                      <span>Open items by domain</span>
+                    </div>
+                    <small>{pulseActiveItems.length} total</small>
+                  </div>
+                  <div className="pulse-lane-list">
+                    {[PULSE_TABS.chats, PULSE_TABS.feed, PULSE_TABS.profile, PULSE_TABS.system].map((lane) => (
+                      <button
+                        key={`pulse-lane-${lane}`}
+                        type="button"
+                        className={pulseTab === lane ? 'active' : ''}
+                        onClick={() => setPulseTab(lane)}
+                      >
+                        <span>{PULSE_LANE_LABELS[lane]}</span>
+                        <strong>{pulseTabCounts[lane] || 0}</strong>
+                      </button>
+                    ))}
+                  </div>
+                </article>
+
+                <article className="pulse-side-card">
+                  <div className="pulse-card-head">
+                    <div>
+                      <strong>Control room</strong>
+                      <span>Quick routes across the workspace</span>
+                    </div>
+                    <small>{pulseResolvedCount} done</small>
+                  </div>
+                  <div className="pulse-control-stack">
+                    <button type="button" className="ghost" onClick={() => runDashboardFocusAction('unread')}>
+                      Open unread chats
+                    </button>
+                    <button type="button" className="ghost" onClick={() => openFeedFocus({ filter: FEED_FILTERS.popular, sortMode: FEED_SORT_MODES.engagement, timeWindow: FEED_TIME_WINDOWS.week })}>
+                      Open hot feed
+                    </button>
+                    <button type="button" className="ghost" onClick={() => setView('profile')}>
+                      Profile lab
+                    </button>
+                    <button type="button" className="ghost" onClick={() => setView('dashboard')}>
+                      Mission control
+                    </button>
+                    {pulseResolvedCount > 0 && (
+                      <button type="button" className="ghost" onClick={restoreAllPulseItems}>
+                        Restore resolved
+                      </button>
+                    )}
+                  </div>
+                </article>
+
+                {pulsePinnedPreviewItems.length > 0 && (
+                  <article className="pulse-side-card">
+                    <div className="pulse-card-head">
+                      <div>
+                        <strong>Pinned focus</strong>
+                        <span>Items you decided to keep nearby</span>
+                      </div>
+                      <small>{pulsePinnedPreviewItems.length}</small>
+                    </div>
+                    <div className="pulse-pinned-list">
+                      {pulsePinnedPreviewItems.map((item) => (
+                        <button
+                          key={`pulse-pin-preview-${item.id}`}
+                          type="button"
+                          className="pulse-pinned-item"
+                          onClick={() => runPulseAction(item)}
+                        >
+                          <strong>{item.title}</strong>
+                          <span>{item.meta || PULSE_LANE_LABELS[item.lane] || item.lane}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </article>
+                )}
+              </aside>
+
+              <section className="pulse-board">
+                <div className="pulse-card-head pulse-board-head">
+                  <div>
+                    <strong>{PULSE_TAB_OPTIONS.find((item) => item.value === pulseTab)?.label || 'Pulse'}</strong>
+                    <span>{pulseVisibleItems.length} items in the current scope</span>
+                  </div>
+                  <small>{pulseQueryNormalized ? `query: ${pulseQueryNormalized}` : pulseWorkspaceHealth}</small>
+                </div>
+
+                {pulseVisibleItems.length === 0 ? (
+                  <div className="pulse-empty-state">
+                    <strong>No items in this view.</strong>
+                    <span>Change filter, clear search, or restore resolved items to rebuild the board.</span>
+                  </div>
+                ) : (
+                  <div className="pulse-list">
+                    {pulseVisibleItems.map((item) => {
+                      const laneLabel = PULSE_LANE_LABELS[item.lane] || item.lane
+                      const relativeAge = item.timestamp ? formatRelativeFeedAge(item.timestamp) : ''
+                      const isPinned = pulsePinnedIdSet.has(item.id)
+                      const isArchived = pulseDismissedIdSet.has(item.id)
+                      return (
+                        <article
+                          key={item.id}
+                          className={`pulse-item tone-${item.tone || 'neutral'} ${isPinned ? 'is-pinned' : ''}`.trim()}
+                        >
+                          <div className="pulse-item-head">
+                            <div className="pulse-item-meta">
+                              <span className="pulse-lane-chip">{laneLabel}</span>
+                              {relativeAge && <span className="pulse-time-chip">{relativeAge}</span>}
+                              <span className="pulse-priority-chip">P{item.priority}</span>
+                            </div>
+                            <div className="pulse-item-tools">
+                              <button
+                                type="button"
+                                className={isPinned ? 'active' : ''}
+                                onClick={() => togglePulsePin(item.id)}
+                                title={isPinned ? 'Unpin item' : 'Pin item'}
+                              >
+                                {isPinned ? '★' : '☆'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => (isArchived ? restorePulseItem(item.id) : dismissPulseItem(item.id))}
+                                title={isArchived ? 'Restore item' : 'Resolve item'}
+                              >
+                                {isArchived ? '↺' : '✓'}
+                              </button>
+                            </div>
+                          </div>
+                          <div className="pulse-item-body">
+                            <h3>{renderHighlightedText(item.title, pulseQueryNormalized)}</h3>
+                            <p>{renderHighlightedText(item.text, pulseQueryNormalized)}</p>
+                          </div>
+                          {(item.badges || []).length > 0 && (
+                            <div className="pulse-badge-row">
+                              {item.badges.map((badge) => (
+                                <span key={`${item.id}-${badge}`} className="pulse-badge">
+                                  {badge}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                          <div className="pulse-item-footer">
+                            <span>{item.meta || 'Open item'}</span>
+                            <button type="button" className="ghost" onClick={() => runPulseAction(item)}>
+                              {item.cta}
+                            </button>
+                          </div>
+                        </article>
+                      )
+                    })}
+                  </div>
+                )}
+              </section>
             </div>
           </div>
         )}
@@ -16413,6 +17254,18 @@ export default function App() {
             title="Панель"
           >
             {icons.dashboard}
+          </button>
+          <button
+            type="button"
+            className={view === 'pulse' ? 'active' : ''}
+            onClick={() => openPulseWorkspace()}
+            title="Pulse"
+            aria-label={pulsePriorityCount > 0 ? `Pulse, priority items: ${pulsePriorityCount}` : 'Pulse'}
+          >
+            {icons.pulse}
+            {pulsePriorityCount > 0 && (
+              <span className="icon-rail-badge">{pulsePriorityCount > 99 ? '99+' : pulsePriorityCount}</span>
+            )}
           </button>
           <button
             type="button"
