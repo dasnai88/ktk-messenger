@@ -127,7 +127,7 @@ const icons = {
 }
 
 const fallbackRoles = [
-  { value: '*', label: 'Owner' },
+  { value: '*', label: 'Владелец' },
   { value: 'student', label: 'Студент' },
   { value: 'teacher', label: 'Учитель' },
   { value: 'programmist', label: 'Программист' },
@@ -435,6 +435,7 @@ const DASHBOARD_SCRATCHPAD_STORAGE_KEY = 'ktk_dashboard_scratchpad_v1'
 const FEED_COMPOSER_DRAFT_STORAGE_KEY = 'ktk_feed_composer_draft_v1'
 const PULSE_DISMISSED_STORAGE_KEY = 'ktk_pulse_dismissed_v1'
 const PULSE_PINNED_STORAGE_KEY = 'ktk_pulse_pinned_v1'
+const APP_LANGUAGE_STORAGE_KEY = 'ktk_app_language_v1'
 const CHAT_WALLPAPER_STORAGE_KEY = 'ktk_chat_wallpapers'
 const CHAT_ALIAS_STORAGE_KEY = 'ktk_chat_aliases'
 const RECENT_STICKERS_STORAGE_KEY = 'ktk_recent_stickers'
@@ -451,10 +452,10 @@ const DASHBOARD_WORKBENCH_MODES = {
   ops: 'ops'
 }
 const DASHBOARD_WORKBENCH_MODE_OPTIONS = [
-  { value: DASHBOARD_WORKBENCH_MODES.focus, label: 'Focus', hint: 'chats + priorities' },
-  { value: DASHBOARD_WORKBENCH_MODES.social, label: 'Social', hint: 'feed + trends' },
-  { value: DASHBOARD_WORKBENCH_MODES.studio, label: 'Studio', hint: 'compose + profile' },
-  { value: DASHBOARD_WORKBENCH_MODES.ops, label: 'Ops', hint: 'signals + sync' }
+  { value: DASHBOARD_WORKBENCH_MODES.focus, label: 'Focus', labelRu: 'Фокус', hint: 'chats + priorities', hintRu: 'чаты + приоритеты' },
+  { value: DASHBOARD_WORKBENCH_MODES.social, label: 'Social', labelRu: 'Соцрадар', hint: 'feed + trends', hintRu: 'лента + тренды' },
+  { value: DASHBOARD_WORKBENCH_MODES.studio, label: 'Studio', labelRu: 'Студия', hint: 'compose + profile', hintRu: 'посты + профиль' },
+  { value: DASHBOARD_WORKBENCH_MODES.ops, label: 'Ops', labelRu: 'Операции', hint: 'signals + sync', hintRu: 'сигналы + синхронизация' }
 ]
 
 const PULSE_TABS = {
@@ -469,20 +470,20 @@ const PULSE_TABS = {
 }
 
 const PULSE_TAB_OPTIONS = [
-  { value: PULSE_TABS.all, label: 'All', hint: 'full queue' },
-  { value: PULSE_TABS.priority, label: 'Priority', hint: 'top actions' },
-  { value: PULSE_TABS.chats, label: 'Chats', hint: 'replies + drafts' },
-  { value: PULSE_TABS.feed, label: 'Feed', hint: 'trends + mentions' },
-  { value: PULSE_TABS.profile, label: 'Profile', hint: 'growth tasks' },
-  { value: PULSE_TABS.system, label: 'System', hint: 'health + alerts' },
-  { value: PULSE_TABS.pinned, label: 'Pinned', hint: 'saved focus' },
-  { value: PULSE_TABS.archived, label: 'Done', hint: 'resolved items' }
+  { value: PULSE_TABS.all, label: 'All', labelRu: 'Все', hint: 'full queue', hintRu: 'вся очередь' },
+  { value: PULSE_TABS.priority, label: 'Priority', labelRu: 'Приоритет', hint: 'top actions', hintRu: 'главные действия' },
+  { value: PULSE_TABS.chats, label: 'Chats', labelRu: 'Чаты', hint: 'replies + drafts', hintRu: 'ответы + черновики' },
+  { value: PULSE_TABS.feed, label: 'Feed', labelRu: 'Лента', hint: 'trends + mentions', hintRu: 'тренды + упоминания' },
+  { value: PULSE_TABS.profile, label: 'Profile', labelRu: 'Профиль', hint: 'growth tasks', hintRu: 'рост и задачи' },
+  { value: PULSE_TABS.system, label: 'System', labelRu: 'Система', hint: 'health + alerts', hintRu: 'здоровье + сигналы' },
+  { value: PULSE_TABS.pinned, label: 'Pinned', labelRu: 'Закреплённое', hint: 'saved focus', hintRu: 'сохранённый фокус' },
+  { value: PULSE_TABS.archived, label: 'Done', labelRu: 'Готово', hint: 'resolved items', hintRu: 'закрытые пункты' }
 ]
 const PULSE_LANE_LABELS = {
-  [PULSE_TABS.chats]: 'Chats',
-  [PULSE_TABS.feed]: 'Feed',
-  [PULSE_TABS.profile]: 'Profile',
-  [PULSE_TABS.system]: 'System'
+  [PULSE_TABS.chats]: 'Чаты',
+  [PULSE_TABS.feed]: 'Лента',
+  [PULSE_TABS.profile]: 'Профиль',
+  [PULSE_TABS.system]: 'Система'
 }
 const PULSE_PRIORITY_THRESHOLD = 80
 
@@ -497,6 +498,11 @@ function normalizePulseTab(value) {
   const normalized = String(value || '').trim().toLowerCase()
   return Object.values(PULSE_TABS).includes(normalized) ? normalized : PULSE_TABS.all
 }
+
+function normalizeAppLanguage(value) {
+  return String(value || '').trim().toLowerCase() === 'en' ? 'en' : 'ru'
+}
+
 const MEDIA_PANEL_TABS = {
   emoji: 'emoji',
   stickers: 'stickers',
@@ -660,7 +666,7 @@ const FEED_LAYOUTS = {
   compact: 'compact'
 }
 const FEED_SORT_TABS = [
-  { value: FEED_SORT_MODES.smart, label: 'Smart' },
+  { value: FEED_SORT_MODES.smart, label: 'Умный' },
   { value: FEED_SORT_MODES.latest, label: 'Новые' },
   { value: FEED_SORT_MODES.engagement, label: 'Хайп' },
   { value: FEED_SORT_MODES.discussed, label: 'Дискуссии' }
@@ -809,14 +815,14 @@ const DEV_TRACK_KEYWORDS = [
   { id: 'devops', label: 'DevOps', keywords: ['ci', 'cd', 'kubernetes', 'devops', 'linux', 'nginx', 'monitoring', 'cloud'] }
 ]
 const UI_STYLE_OPTIONS = [
-  { value: 'glass', label: 'Glass' },
-  { value: 'neo', label: 'Neo' },
-  { value: 'classic', label: 'Classic' }
+  { value: 'glass', label: 'Glass', labelRu: 'Стекло' },
+  { value: 'neo', label: 'Neo', labelRu: 'Нео' },
+  { value: 'classic', label: 'Classic', labelRu: 'Классика' }
 ]
 const UI_DENSITY_OPTIONS = [
-  { value: 'compact', label: 'Compact' },
-  { value: 'comfortable', label: 'Comfort' },
-  { value: 'spacious', label: 'Spacious' }
+  { value: 'compact', label: 'Compact', labelRu: 'Компактно' },
+  { value: 'comfortable', label: 'Comfort', labelRu: 'Комфортно' },
+  { value: 'spacious', label: 'Spacious', labelRu: 'Свободно' }
 ]
 const UI_THEME_COLOR_PRESETS = [
   { id: 'ember', label: 'Ember', accent: '#7a1f1d', accent2: '#b64d45' },
@@ -828,8 +834,8 @@ const UI_THEME_COLOR_PRESETS = [
 const UI_THEME_SCENE_PRESETS = [
   {
     id: 'aurora-deck',
-    label: 'Aurora Deck',
-    hint: 'Cool accents for chat and control panels.',
+    label: 'Палуба Aurora',
+    hint: 'Холодные акценты для чатов и контрольных панелей.',
     theme: 'dark',
     preferences: {
       style: 'glass',
@@ -856,8 +862,8 @@ const UI_THEME_SCENE_PRESETS = [
   },
   {
     id: 'ember-studio',
-    label: 'Ember Studio',
-    hint: 'Warm high-contrast look for feed-heavy sessions.',
+    label: 'Студия Ember',
+    hint: 'Тёплый контрастный вид для сессий с упором на ленту.',
     theme: 'dark',
     preferences: {
       style: 'neo',
@@ -884,8 +890,8 @@ const UI_THEME_SCENE_PRESETS = [
   },
   {
     id: 'mint-canvas',
-    label: 'Mint Canvas',
-    hint: 'Minimal dark palette with clean green highlights.',
+    label: 'Мятный холст',
+    hint: 'Минималистичная тёмная палитра с чистыми зелёными акцентами.',
     theme: 'dark',
     preferences: {
       style: 'classic',
@@ -912,8 +918,8 @@ const UI_THEME_SCENE_PRESETS = [
   },
   {
     id: 'clean-light',
-    label: 'Clean Light',
-    hint: 'Light mode with calm cards and clear borders.',
+    label: 'Чистый свет',
+    hint: 'Светлый режим со спокойными карточками и чёткими границами.',
     theme: 'light',
     preferences: {
       style: 'glass',
@@ -942,35 +948,35 @@ const UI_THEME_SCENE_PRESETS = [
 const PROFILE_VISUAL_SCENE_PRESETS = [
   {
     id: 'frost-neon',
-    label: 'Frost Neon',
+    label: 'Морозный неон',
     hint: 'Холодный баннер + неон в карточке профиля.',
     themeColor: '#2d68ff',
     heroTheme: 'neon'
   },
   {
     id: 'sunset-warm',
-    label: 'Sunset Warm',
+    label: 'Тёплый закат',
     hint: 'Теплый акцент для баннера и мягкий градиент.',
     themeColor: '#d46a2c',
     heroTheme: 'sunset'
   },
   {
     id: 'forest-deep',
-    label: 'Forest Deep',
+    label: 'Глубокий лес',
     hint: 'Сдержанный зеленый стиль с чистой читабельностью.',
     themeColor: '#1b7a4f',
     heroTheme: 'forest'
   },
   {
     id: 'ocean-calm',
-    label: 'Ocean Calm',
+    label: 'Спокойный океан',
     hint: 'Спокойный синий стиль для повседневного профиля.',
     themeColor: '#1f4f7a',
     heroTheme: 'ocean'
   },
   {
     id: 'classic-ruby',
-    label: 'Classic Ruby',
+    label: 'Классический рубин',
     hint: 'Классический фирменный вид.',
     themeColor: '#7a1f1d',
     heroTheme: 'default'
@@ -1657,18 +1663,18 @@ function getPushErrorFeedback(err) {
   if (hasCertificateError) {
     return {
       supported: false,
-      message: 'System notifications are unavailable: invalid HTTPS certificate on this domain.'
+      message: 'Системные уведомления недоступны: у домена некорректный HTTPS-сертификат.'
     }
   }
   if (lower.includes('failed to register a serviceworker') || lower.includes('serviceworker')) {
     return {
       supported: false,
-      message: 'System notifications are unavailable: failed to register service worker.'
+      message: 'Системные уведомления недоступны: не удалось зарегистрировать service worker.'
     }
   }
   return {
     supported: true,
-    message: rawMessage || 'Failed to configure notifications.'
+    message: rawMessage || 'Не удалось настроить уведомления.'
   }
 }
 
@@ -1954,6 +1960,14 @@ export default function App() {
     }
     return 'dark'
   })
+  const [appLanguage, setAppLanguage] = useState(() => {
+    if (typeof window === 'undefined') return 'ru'
+    try {
+      return normalizeAppLanguage(localStorage.getItem(APP_LANGUAGE_STORAGE_KEY))
+    } catch (err) {
+      return 'ru'
+    }
+  })
   const [uiPreferences, setUiPreferences] = useState(() => {
     if (typeof window === 'undefined') return { ...DEFAULT_UI_PREFERENCES }
     try {
@@ -1986,6 +2000,20 @@ export default function App() {
   const [profileShowcaseForm, setProfileShowcaseForm] = useState(() => mapShowcaseToForm(DEFAULT_PROFILE_SHOWCASE))
   const [toasts, setToasts] = useState([])
   const [loading, setLoading] = useState(false)
+  const isEnglishUi = appLanguage === 'en'
+  const uiText = (ruText, enText) => (isEnglishUi ? enText : ruText)
+  const getUiStyleLabel = (value) => {
+    const option = UI_STYLE_OPTIONS.find((item) => item.value === value)
+    return option ? (isEnglishUi ? option.label : option.labelRu || option.label) : value
+  }
+  const getUiDensityLabel = (value) => {
+    const option = UI_DENSITY_OPTIONS.find((item) => item.value === value)
+    return option ? (isEnglishUi ? option.label : option.labelRu || option.label) : value
+  }
+  const getWorkbenchModeLabel = (item) => (isEnglishUi ? item.label : item.labelRu || item.label)
+  const getWorkbenchModeHint = (item) => (isEnglishUi ? item.hint : item.hintRu || item.hint)
+  const getPulseTabLabel = (item) => (isEnglishUi ? item.label : item.labelRu || item.label)
+  const getPulseTabHint = (item) => (isEnglishUi ? item.hint : item.hintRu || item.hint)
 
   const [conversations, setConversations] = useState([])
   const [activeConversation, setActiveConversation] = useState(null)
@@ -3426,7 +3454,7 @@ export default function App() {
       {
         id: 'refresh',
         title: 'Синхронизировать',
-        subtitle: dashboardLastRefreshAt ? `Последнее: ${formatTime(dashboardLastRefreshAt)}` : 'Обновить snapshot',
+        subtitle: dashboardLastRefreshAt ? `Последнее: ${formatTime(dashboardLastRefreshAt)}` : 'Обновить снимок',
         icon: '↻',
         accent: dashboardRefreshLoading ? 'warn' : 'neutral',
         action: 'refresh'
@@ -3445,22 +3473,22 @@ export default function App() {
   const dashboardMissionSignals = useMemo(() => ([
     {
       id: 'workspace',
-      label: 'Workspace score',
+      label: 'Индекс пространства',
       value: `${dashboardWorkspaceScore}%`
     },
     {
       id: 'unread',
-      label: 'Unread pressure',
-      value: unreadMessagesCount > 0 ? `${unreadMessagesCount} msgs` : 'clear'
+      label: 'Непрочитанные',
+      value: unreadMessagesCount > 0 ? `${unreadMessagesCount} сообщ.` : 'чисто'
     },
     {
       id: 'feed',
-      label: 'Fresh stream',
-      value: feedDigest.freshCount > 0 ? `${feedDigest.freshCount} new` : 'steady'
+      label: 'Свежая лента',
+      value: feedDigest.freshCount > 0 ? `${feedDigest.freshCount} новых` : 'ровно'
     },
     {
       id: 'profile',
-      label: 'Profile lab',
+      label: 'Профиль',
       value: `${profileEditorScore}%`
     }
   ]), [dashboardWorkspaceScore, unreadMessagesCount, feedDigest.freshCount, profileEditorScore])
@@ -3477,19 +3505,19 @@ export default function App() {
       return [
         'Идея поста: показать прогресс по проекту',
         'Профиль: что ещё не заполнено?',
-        'Что вынести в Showcase headline?'
+        'Что вынести в заголовок Showcase?'
       ]
     }
     if (dashboardWorkbenchMode === DASHBOARD_WORKBENCH_MODES.ops) {
       return [
         'Проверить realtime и push',
-        'Сверить health + presence snapshot',
-        'Есть ли alerts, которые нужно закрыть?'
+        'Сверить здоровье сервиса и снимок присутствия',
+        'Есть ли сигналы, которые нужно закрыть?'
       ]
     }
     return [
       'Кому ответить в первую очередь?',
-      'Какой диалог требует follow-up?',
+      'Какой диалог требует продолжения?',
       `Нужен ли быстрый заход в ${hottestTag}?`
     ]
   }, [dashboardWorkbenchMode, trendingTags])
@@ -3500,14 +3528,14 @@ export default function App() {
       return [
         {
           id: 'social-hot',
-          eyebrow: 'Momentum',
-          title: hotFeedPosts[0] ? `Открыть hype: ${hotFeedPosts[0].post.author.displayName || hotFeedPosts[0].post.author.username}` : 'Разогреть ленту',
+          eyebrow: 'Импульс',
+          title: hotFeedPosts[0] ? `Открыть хайп: ${hotFeedPosts[0].post.author.displayName || hotFeedPosts[0].post.author.username}` : 'Разогреть ленту',
           text: hotFeedPosts[0] ? `${hotFeedPosts[0].score} очков вовлечения` : 'Сейчас можно зайти в общую ленту и задать темп.',
           action: 'feed-hot'
         },
         {
           id: 'social-tag',
-          eyebrow: 'Trend',
+          eyebrow: 'Тренд',
           title: hottestTag ? hottestTag.tag : 'Тренд ещё не сформирован',
           text: hottestTag ? `${hottestTag.count} упоминаний в постах` : 'Подожди пару публикаций или создай тему сам.',
           action: hottestTag ? 'tag' : 'compose',
@@ -3515,7 +3543,7 @@ export default function App() {
         },
         {
           id: 'social-bookmarks',
-          eyebrow: 'Library',
+          eyebrow: 'Библиотека',
           title: 'Поднять сохранённые посты',
           text: bookmarkedPostIds.size > 0 ? `${bookmarkedPostIds.size} материалов уже в закладках` : 'Сохрани полезные посты для быстрого возврата.',
           action: 'bookmarks'
@@ -3526,21 +3554,21 @@ export default function App() {
       return [
         {
           id: 'studio-compose',
-          eyebrow: 'Composer',
-          title: String(postText || '').trim() ? 'Продолжить черновик поста' : 'Открыть быстрый composer',
+          eyebrow: 'Пост',
+          title: String(postText || '').trim() ? 'Продолжить черновик поста' : 'Открыть быстрый редактор',
           text: String(postText || '').trim() ? `${String(postText || '').trim().length} символов уже набрано` : 'Собери короткий апдейт или витринный пост.',
           action: 'compose'
         },
         {
           id: 'studio-profile',
-          eyebrow: 'Profile lab',
+          eyebrow: 'Профиль',
           title: 'Прокачать публичный образ',
           text: profileEditorPendingChecklist[0] ? profileEditorPendingChecklist[0].label : 'Профиль выглядит завершённым.',
           action: 'profile'
         },
         {
           id: 'studio-mine',
-          eyebrow: 'Archive',
+          eyebrow: 'Архив',
           title: 'Разобрать свои публикации',
           text: feedMetrics.mine > 0 ? `${feedMetrics.mine} постов уже в архиве` : 'Пока нет своих постов. Самое время начать.',
           action: 'mine-posts'
@@ -3551,21 +3579,21 @@ export default function App() {
       return [
         {
           id: 'ops-health',
-          eyebrow: 'Health',
+          eyebrow: 'Состояние',
           title: health && health.ok ? 'Сервис отвечает стабильно' : 'Проверить состояние сервера',
-          text: health && health.ok ? 'Можно обновить snapshot и убедиться, что всё синхронизировано.' : 'Есть смысл вручную обновить данные прямо сейчас.',
+          text: health && health.ok ? 'Можно обновить снимок и убедиться, что всё синхронизировано.' : 'Есть смысл вручную обновить данные прямо сейчас.',
           action: 'refresh'
         },
         {
           id: 'ops-push',
-          eyebrow: 'Notifications',
+          eyebrow: 'Уведомления',
           title: pushState.enabled ? 'Push активен' : 'Синхронизировать push',
           text: pushState.enabled ? 'Уведомления готовы к работе.' : (pushState.error || 'Проверь push-состояние и разрешения.'),
           action: 'push'
         },
         {
           id: 'ops-chat',
-          eyebrow: 'Queue',
+          eyebrow: 'Очередь',
           title: topConversation ? getConversationDisplayName(topConversation, chatAliasByConversation) : 'Открыть список диалогов',
           text: topConversation ? (topConversation.lastMessage || 'Перейти к приоритетному чату') : 'Нет активного диалога для быстрого возврата.',
           action: topConversation ? 'resume-chat' : 'unread'
@@ -3575,21 +3603,21 @@ export default function App() {
     return [
       {
         id: 'focus-unread',
-        eyebrow: 'Inbox',
+        eyebrow: 'Входящие',
         title: unreadConversationCount > 0 ? 'Разобрать непрочитанные диалоги' : 'Диалоги под контролем',
         text: unreadConversationCount > 0 ? `${unreadConversationCount} чатов ждут ответа` : 'Можно переключиться на ленту или публикацию.',
         action: 'unread'
       },
       {
         id: 'focus-drafts',
-        eyebrow: 'Drafts',
+        eyebrow: 'Черновики',
         title: dashboardDraftQueue.length > 0 ? 'Вернуться к черновикам' : 'Новых черновиков нет',
         text: dashboardDraftQueue.length > 0 ? `${dashboardDraftQueue.length} разговоров с набранным текстом` : 'Сейчас можно закрыть другие хвосты.',
         action: dashboardDraftQueue.length > 0 ? 'drafts' : 'compose'
       },
       {
         id: 'focus-chat',
-        eyebrow: 'Next move',
+        eyebrow: 'Следующий шаг',
         title: topConversation ? getConversationDisplayName(topConversation, chatAliasByConversation) : 'Открыть активный чат',
         text: topConversation ? (topConversation.lastMessage || 'Открыть диалог') : 'Выбери разговор и продолжи поток.',
         action: topConversation ? 'resume-chat' : 'chats'
@@ -3675,29 +3703,29 @@ export default function App() {
   const dashboardWorkbenchSummary = useMemo(() => {
     if (dashboardWorkbenchMode === DASHBOARD_WORKBENCH_MODES.social) {
       return {
-        title: 'Social radar',
+        title: 'Соцрадар',
         description: 'Следи за горячей лентой, трендами и вовлечением без лишнего шума.',
-        badge: hotFeedPosts[0] ? `${hotFeedPosts.length} hot posts` : 'quiet stream'
+        badge: hotFeedPosts[0] ? `${hotFeedPosts.length} горячих постов` : 'спокойный поток'
       }
     }
     if (dashboardWorkbenchMode === DASHBOARD_WORKBENCH_MODES.studio) {
       return {
-        title: 'Studio lane',
+        title: 'Студия',
         description: 'Собирай публикации, докручивай профиль и веди заметки в одном месте.',
-        badge: String(postText || '').trim() ? 'draft in progress' : 'ready to publish'
+        badge: String(postText || '').trim() ? 'черновик в работе' : 'готово к публикации'
       }
     }
     if (dashboardWorkbenchMode === DASHBOARD_WORKBENCH_MODES.ops) {
       return {
-        title: 'Ops board',
+        title: 'Операции',
         description: 'Контролируй realtime, push и health, пока сервис держится в тонусе.',
-        badge: dashboardSystemAlerts.length > 0 ? `${dashboardSystemAlerts.length} alerts` : 'all systems nominal'
+        badge: dashboardSystemAlerts.length > 0 ? `${dashboardSystemAlerts.length} сигналов` : 'всё стабильно'
       }
     }
     return {
-      title: 'Focus lane',
+      title: 'Фокус',
       description: 'Быстрый доступ к приоритетным чатам, свежим задачам и следующему шагу.',
-      badge: unreadConversationCount > 0 ? `${unreadConversationCount} chats need attention` : 'queue is under control'
+      badge: unreadConversationCount > 0 ? `${unreadConversationCount} чатов требуют внимания` : 'очередь под контролем'
     }
   }, [dashboardWorkbenchMode, hotFeedPosts, postText, dashboardSystemAlerts.length, unreadConversationCount])
   const dashboardFocusQueue = useMemo(() => {
@@ -3844,17 +3872,17 @@ export default function App() {
           lane: PULSE_TABS.chats,
           priority: Math.min(98, 84 + Math.min(12, conversation.unreadCount * 2) - index),
           title: conversation.title,
-          text: truncateText(conversation.lastMessage || 'Open the conversation and continue the thread.', 120),
+          text: truncateText(conversation.lastMessage || 'Открой диалог и продолжи переписку.', 120),
           timestamp: conversation.lastAt || null,
-          meta: `${conversation.unreadCount} unread`,
+          meta: `${conversation.unreadCount} непрочитанных`,
           actionId: 'open-conversation',
           payload: { conversationId: conversation.id },
-          cta: 'Open chat',
+          cta: 'Открыть чат',
           tone: conversation.unreadCount >= 4 ? 'warn' : 'accent',
           badges: [
-            'Unread',
-            conversation.online ? 'Online' : '',
-            conversation.isFavorite ? 'Pinned chat' : ''
+            'Непрочитано',
+            conversation.online ? 'Онлайн' : '',
+            conversation.isFavorite ? 'Избранный чат' : ''
           ].filter(Boolean)
         })
       })
@@ -3864,15 +3892,15 @@ export default function App() {
         id: `chat-draft-${conversation.id}`,
         lane: PULSE_TABS.chats,
         priority: 74 - index,
-        title: `Draft in ${conversation.title}`,
-        text: truncateText(conversation.draftText || 'Resume the saved draft.', 120),
+        title: `Черновик в ${conversation.title}`,
+        text: truncateText(conversation.draftText || 'Продолжи сохранённый черновик.', 120),
         timestamp: conversation.lastAt || null,
-        meta: 'Local draft',
+        meta: 'Локальный черновик',
         actionId: 'open-conversation',
         payload: { conversationId: conversation.id },
-        cta: 'Resume draft',
+        cta: 'Продолжить',
         tone: 'neutral',
-        badges: ['Draft']
+        badges: ['Черновик']
       })
     })
 
@@ -3881,56 +3909,56 @@ export default function App() {
         id: 'feed-composer-draft',
         lane: PULSE_TABS.feed,
         priority: 72,
-        title: 'Feed draft is waiting',
+        title: 'Черновик поста ждёт',
         text: truncateText(postText, 130),
         timestamp: feedComposerDraftSavedAt || null,
-        meta: feedComposerDraftSavedAt ? `Saved ${formatRelativeFeedAge(feedComposerDraftSavedAt)}` : 'Saved locally',
+        meta: feedComposerDraftSavedAt ? `Сохранено ${formatRelativeFeedAge(feedComposerDraftSavedAt)}` : 'Сохранено локально',
         actionId: 'open-compose',
         payload: null,
-        cta: 'Resume draft',
+        cta: 'Продолжить',
         tone: 'accent',
-        badges: [`${String(postText || '').trim().length} chars`]
+        badges: [`${String(postText || '').trim().length} симв.`]
       })
     }
 
     hotFeedPosts.slice(0, 4).forEach((entry, index) => {
       const post = entry && entry.post ? entry.post : null
       if (!post || !post.id) return
-      const authorLabel = post.author?.displayName || post.author?.username || 'Author'
+      const authorLabel = post.author?.displayName || post.author?.username || 'Автор'
       items.push({
         id: `feed-hot-${post.id}`,
         lane: PULSE_TABS.feed,
         priority: Math.max(68, 86 - (index * 3)),
-        title: `Hot feed: ${authorLabel}`,
-        text: getFeedPostPreview(post, 'Open the hot lane in feed.'),
+        title: `Горячая лента: ${authorLabel}`,
+        text: getFeedPostPreview(post, 'Открой горячий поток в ленте.'),
         timestamp: post.createdAt || null,
-        meta: `${entry.score} pts engagement`,
+        meta: `${entry.score} очков вовлечения`,
         actionId: 'open-feed-hot',
         payload: { authorId: post.author?.id || '' },
-        cta: 'Open feed',
+        cta: 'Открыть ленту',
         tone: 'accent',
         badges: [
           (extractHashtags(post.body)[0] || '').trim(),
-          post.imageUrl ? 'Media' : ''
+          post.imageUrl ? 'Медиа' : ''
         ].filter(Boolean)
       })
     })
 
     pulseMentionPosts.forEach((post, index) => {
-      const authorLabel = post.author?.displayName || post.author?.username || 'Author'
+      const authorLabel = post.author?.displayName || post.author?.username || 'Автор'
       items.push({
         id: `feed-mention-${post.id}`,
         lane: PULSE_TABS.feed,
         priority: Math.max(70, 83 - (index * 3)),
-        title: `Mention from ${authorLabel}`,
-        text: getFeedPostPreview(post, 'You were mentioned in feed.'),
+        title: `Упоминание от ${authorLabel}`,
+        text: getFeedPostPreview(post, 'Тебя упомянули в ленте.'),
         timestamp: post.createdAt || null,
-        meta: 'Mention detected',
+        meta: 'Найдено упоминание',
         actionId: 'open-feed-query',
         payload: { query: `@${user.username}` },
-        cta: 'See mentions',
+        cta: 'Посмотреть',
         tone: 'warn',
-        badges: ['Mention']
+        badges: ['Упоминание']
       })
     })
 
@@ -3939,15 +3967,15 @@ export default function App() {
         id: `feed-trend-${trendingTags[0].tag}`,
         lane: PULSE_TABS.feed,
         priority: 66,
-        title: `Trend ${trendingTags[0].tag}`,
-        text: `${trendingTags[0].count} posts are riding this topic right now.`,
+        title: `Тренд ${trendingTags[0].tag}`,
+        text: `${trendingTags[0].count} постов сейчас крутятся вокруг этой темы.`,
         timestamp: posts[0] ? posts[0].createdAt || null : null,
-        meta: 'Trending tag',
+        meta: 'Трендовый тег',
         actionId: 'open-feed-tag',
         payload: { tag: trendingTags[0].tag },
-        cta: 'Open trend',
+        cta: 'Открыть тренд',
         tone: 'neutral',
-        badges: ['Trend']
+        badges: ['Тренд']
       })
     }
 
@@ -3956,15 +3984,15 @@ export default function App() {
         id: 'feed-bookmarks',
         lane: PULSE_TABS.feed,
         priority: 54,
-        title: 'Review saved posts',
-        text: `${bookmarkedPostIds.size} bookmarked posts are ready for a second pass.`,
+        title: 'Пересмотреть сохранённые посты',
+        text: `${bookmarkedPostIds.size} сохранённых постов ждут второго прохода.`,
         timestamp: null,
-        meta: 'Bookmarks',
+        meta: 'Закладки',
         actionId: 'open-feed-bookmarks',
         payload: null,
-        cta: 'Open bookmarks',
+        cta: 'Открыть закладки',
         tone: 'neutral',
-        badges: ['Library']
+        badges: ['Библиотека']
       })
     }
 
@@ -3973,15 +4001,15 @@ export default function App() {
         id: `profile-task-${item.id}`,
         lane: PULSE_TABS.profile,
         priority: Math.max(58, 76 - (index * 3)),
-        title: `Profile lab: ${item.label}`,
-        text: 'Complete this step to raise profile readiness and polish your public card.',
+        title: `Профиль: ${item.label}`,
+        text: 'Заверши этот шаг, чтобы поднять готовность профиля и улучшить публичную карточку.',
         timestamp: null,
-        meta: `${profileEditorScore}% ready`,
+        meta: `${profileEditorScore}% готовности`,
         actionId: 'open-profile',
         payload: null,
-        cta: 'Open profile',
+        cta: 'Открыть профиль',
         tone: 'accent',
-        badges: ['Profile']
+        badges: ['Профиль']
       })
     })
 
@@ -3990,15 +4018,15 @@ export default function App() {
         id: 'profile-verification-pending',
         lane: PULSE_TABS.profile,
         priority: 60,
-        title: 'Verification request is under review',
-        text: verificationRequest.reason || 'Admins are reviewing your verification request.',
+        title: 'Заявка на верификацию на проверке',
+        text: verificationRequest.reason || 'Админы проверяют твою заявку на верификацию.',
         timestamp: verificationRequest.updatedAt || verificationRequest.createdAt || null,
-        meta: 'Verification',
+        meta: 'Верификация',
         actionId: 'open-profile',
         payload: null,
-        cta: 'Open profile',
+        cta: 'Открыть профиль',
         tone: 'neutral',
-        badges: ['Verification']
+        badges: ['Верификация']
       })
     }
 
@@ -4022,9 +4050,9 @@ export default function App() {
         meta: item.level,
         actionId: mappedAction.actionId,
         payload: mappedAction.payload,
-        cta: 'Open',
+        cta: 'Открыть',
         tone: item.level,
-        badges: ['System']
+        badges: ['Система']
       })
     })
 
@@ -4034,17 +4062,17 @@ export default function App() {
         id: 'system-refresh-stale',
         lane: PULSE_TABS.system,
         priority: 64,
-        title: 'Workspace snapshot is stale',
+        title: 'Снимок пространства устарел',
         text: dashboardLastRefreshAt
-          ? `Last sync was ${formatRelativeFeedAge(dashboardLastRefreshAt)}. Refresh the workspace snapshot.`
-          : 'This workspace has not been synced yet.',
+          ? `Последняя синхронизация была ${formatRelativeFeedAge(dashboardLastRefreshAt)}. Обнови снимок пространства.`
+          : 'Это пространство ещё не синхронизировалось.',
         timestamp: dashboardLastRefreshAt || null,
-        meta: 'Sync',
+        meta: 'Синхронизация',
         actionId: 'refresh-workspace',
         payload: null,
-        cta: 'Refresh',
+        cta: 'Обновить',
         tone: 'neutral',
-        badges: ['Sync']
+        badges: ['Синхронизация']
       })
     }
 
@@ -4053,15 +4081,15 @@ export default function App() {
         id: 'system-health',
         lane: PULSE_TABS.system,
         priority: 93,
-        title: 'Backend health needs attention',
-        text: 'Health check is not green. Verify service status and recent deploys.',
+        title: 'Состояние backend требует внимания',
+        text: 'Проверка состояния не зелёная. Проверь статус сервиса и последние деплои.',
         timestamp: dashboardLastRefreshAt || null,
-        meta: 'Health',
+        meta: 'Состояние',
         actionId: 'open-dashboard',
         payload: null,
-        cta: 'Open dashboard',
+        cta: 'Открыть панель',
         tone: 'danger',
-        badges: ['Health']
+        badges: ['Состояние']
       })
     }
 
@@ -4343,6 +4371,17 @@ export default function App() {
       // ignore storage errors
     }
   }, [theme])
+
+  useEffect(() => {
+    if (typeof document !== 'undefined') {
+      document.documentElement.lang = appLanguage
+    }
+    try {
+      localStorage.setItem(APP_LANGUAGE_STORAGE_KEY, appLanguage)
+    } catch (err) {
+      // ignore storage errors
+    }
+  }, [appLanguage])
 
   useEffect(() => {
     if (typeof document === 'undefined') return
@@ -4903,7 +4942,7 @@ export default function App() {
 
   const ensureServiceWorkerRegistration = async () => {
     if (!isPushSupported()) {
-      throw new Error('Push notifications are not supported in this browser.')
+      throw new Error('Push-уведомления не поддерживаются в этом браузере.')
     }
     if (serviceWorkerRegistrationRef.current) {
       return serviceWorkerRegistrationRef.current
@@ -4918,7 +4957,7 @@ export default function App() {
     if (pushPublicKeyRef.current) return pushPublicKeyRef.current
     const data = await getPushPublicKey()
     if (!data || !data.publicKey) {
-      throw new Error('Web push is not configured on the server.')
+      throw new Error('Web Push не настроен на сервере.')
     }
     pushPublicKeyRef.current = data.publicKey
     return pushPublicKeyRef.current
@@ -4990,7 +5029,7 @@ export default function App() {
         permission,
         enabled: false,
         loading: false,
-        error: keepError ? (feedback.message || prev.error || 'Push setup failed') : ''
+        error: keepError ? (feedback.message || prev.error || 'Не удалось настроить push') : ''
       }))
     }
   }
@@ -5010,7 +5049,7 @@ export default function App() {
 
   const enablePushNotifications = async () => {
     if (!user) {
-      setStatus({ type: 'info', message: 'Sign in first to enable notifications.' })
+      setStatus({ type: 'info', message: 'Сначала войдите в аккаунт, чтобы включить уведомления.' })
       return
     }
     setPushState((prev) => ({ ...prev, loading: true, error: '' }))
@@ -5030,15 +5069,15 @@ export default function App() {
           enabled: false,
           loading: false,
           error: permission === 'denied'
-            ? 'Notification permission is blocked in browser settings.'
+            ? 'Разрешение на уведомления заблокировано в настройках браузера.'
             : ''
         })
         return
       }
       await attachPushSubscriptionToUser()
       pushToast({
-        title: 'Notifications enabled',
-        message: 'You will receive messages on this device.',
+        title: 'Уведомления включены',
+        message: 'Сообщения будут приходить на это устройство.',
         type: 'info'
       })
     } catch (err) {
@@ -5048,7 +5087,7 @@ export default function App() {
         supported: feedback.supported,
         loading: false,
         enabled: false,
-        error: feedback.message || 'Failed to enable notifications'
+        error: feedback.message || 'Не удалось включить уведомления'
       }))
     }
   }
@@ -7873,7 +7912,7 @@ export default function App() {
       return
     }
     if (profileMessagingBlocked) {
-      setStatus({ type: 'error', message: 'Direct messages are blocked by privacy settings.' })
+      setStatus({ type: 'error', message: 'Личные сообщения заблокированы настройками приватности.' })
       return
     }
     setLoading(true)
@@ -7896,7 +7935,7 @@ export default function App() {
   const handleSendProfileWave = async () => {
     if (!profileView || !profileView.username || !user || profileView.id === user.id) return
     if (profileMessagingBlocked) {
-      setStatus({ type: 'error', message: 'Direct messages are blocked by privacy settings.' })
+      setStatus({ type: 'error', message: 'Личные сообщения заблокированы настройками приватности.' })
       return
     }
     setLoading(true)
@@ -8652,9 +8691,9 @@ export default function App() {
       },
       {
         id: 'go-pulse',
-        title: 'Open Pulse workspace',
-        hint: 'Inbox, priorities, triage board',
-        keywords: 'pulse activity inbox tasks focus',
+        title: 'Открыть Pulse',
+        hint: 'Входящие, приоритеты и triage-доска',
+        keywords: 'pulse активность входящие задачи фокус',
         run: () => openPulseWorkspace()
       },
       {
@@ -9126,7 +9165,7 @@ export default function App() {
     const target = miniProfileCard.user
     if (!target || !target.username) return
     if (miniProfileDmBlocked) {
-      setStatus({ type: 'error', message: 'Direct messages are blocked by privacy settings.' })
+      setStatus({ type: 'error', message: 'Личные сообщения заблокированы настройками приватности.' })
       return
     }
     if (user && target.username === user.username) {
@@ -9176,7 +9215,7 @@ export default function App() {
     if (!target || !target.username || !user) return
     if (target.username === user.username) return
     if (miniProfileDmBlocked) {
-      setStatus({ type: 'error', message: 'Direct messages are blocked by privacy settings.' })
+      setStatus({ type: 'error', message: 'Личные сообщения заблокированы настройками приватности.' })
       return
     }
     try {
@@ -9587,7 +9626,7 @@ export default function App() {
   const saveCurrentUiThemePreset = () => {
     const name = normalizeUiThemePresetName(uiCustomPresetName, '')
     if (!name) {
-      setStatus({ type: 'error', message: 'Preset name is required.' })
+      setStatus({ type: 'error', message: 'Укажите название пресета.' })
       return
     }
     const snapshot = normalizeUiPreferences(uiPreferences)
@@ -9616,29 +9655,29 @@ export default function App() {
       return next.slice(0, UI_CUSTOM_THEME_PRESET_LIMIT)
     })
     setUiCustomPresetName('')
-    setStatus({ type: 'success', message: 'Theme preset saved.' })
+    setStatus({ type: 'success', message: 'Пресет темы сохранён.' })
   }
 
   const applyUiCustomThemePreset = (preset) => {
     if (!preset || typeof preset !== 'object') return
     setUiPreferences(normalizeUiPreferences(preset.preferences))
-    setStatus({ type: 'success', message: `Preset "${preset.name}" applied.` })
+    setStatus({ type: 'success', message: `Пресет "${preset.name}" применён.` })
   }
 
   const deleteUiCustomThemePreset = (presetId) => {
     setUiCustomThemePresets((prev) => prev.filter((item) => item.id !== presetId))
-    setStatus({ type: 'info', message: 'Theme preset deleted.' })
+    setStatus({ type: 'info', message: 'Пресет темы удалён.' })
   }
 
   const renameUiCustomThemePreset = (presetId) => {
     const target = uiCustomThemePresets.find((item) => item.id === presetId)
     if (!target) return
     if (typeof window === 'undefined' || typeof window.prompt !== 'function') return
-    const prompted = window.prompt('Preset name', target.name)
+    const prompted = window.prompt('Название пресета', target.name)
     if (prompted === null) return
     const name = normalizeUiThemePresetName(prompted, '')
     if (!name) {
-      setStatus({ type: 'error', message: 'Preset name cannot be empty.' })
+      setStatus({ type: 'error', message: 'Название пресета не может быть пустым.' })
       return
     }
     setUiCustomThemePresets((prev) => prev.map((item) => (
@@ -9646,7 +9685,7 @@ export default function App() {
         ? { ...item, name, updatedAt: new Date().toISOString() }
         : item
     )))
-    setStatus({ type: 'success', message: 'Preset renamed.' })
+    setStatus({ type: 'success', message: 'Пресет переименован.' })
   }
 
   const applyUiThemePreset = (preset) => {
@@ -9665,7 +9704,7 @@ export default function App() {
     if (scene.theme === 'light' || scene.theme === 'dark') {
       setTheme(scene.theme)
     }
-    setStatus({ type: 'success', message: `Scene "${scene.label}" applied.` })
+    setStatus({ type: 'success', message: `Сцена "${scene.label}" применена.` })
   }
 
   const applyRandomUiScenePreset = () => {
@@ -9699,7 +9738,7 @@ export default function App() {
     link.click()
     document.body.removeChild(link)
     URL.revokeObjectURL(url)
-    setStatus({ type: 'success', message: 'Theme pack exported to JSON.' })
+    setStatus({ type: 'success', message: 'Пакет темы экспортирован в JSON.' })
   }
 
   const copyUiThemePackJson = async () => {
@@ -9711,36 +9750,36 @@ export default function App() {
     if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.writeText) {
       try {
         await navigator.clipboard.writeText(json)
-        setStatus({ type: 'success', message: 'Theme JSON copied to clipboard.' })
+        setStatus({ type: 'success', message: 'JSON темы скопирован в буфер обмена.' })
         return
       } catch (err) {
         // fallback to local field
       }
     }
     setAppearanceImportJson(json)
-    setStatus({ type: 'info', message: 'Clipboard unavailable. JSON inserted into import field.' })
+    setStatus({ type: 'info', message: 'Буфер обмена недоступен. JSON вставлен в поле импорта.' })
   }
 
   const applyImportedUiThemePack = (rawText) => {
     const text = String(rawText || '').trim()
     if (!text) {
-      setStatus({ type: 'error', message: 'Paste JSON first.' })
+      setStatus({ type: 'error', message: 'Сначала вставьте JSON.' })
       return
     }
     let parsed
     try {
       parsed = JSON.parse(text)
     } catch (err) {
-      setStatus({ type: 'error', message: 'Invalid JSON format.' })
+      setStatus({ type: 'error', message: 'Неверный формат JSON.' })
       return
     }
     const imported = normalizeImportedThemePack(parsed)
     if (!imported) {
-      setStatus({ type: 'error', message: 'Theme pack is empty or invalid.' })
+      setStatus({ type: 'error', message: 'Пакет темы пустой или некорректный.' })
       return
     }
     if (imported.kind && imported.kind !== THEME_PACK_KIND) {
-      setStatus({ type: 'error', message: 'Unsupported theme pack format.' })
+      setStatus({ type: 'error', message: 'Формат пакета темы не поддерживается.' })
       return
     }
     setUiPreferences(imported.uiPreferences)
@@ -9762,7 +9801,7 @@ export default function App() {
     }
     setStatus({
       type: 'success',
-      message: `Theme pack imported${imported.version ? ` (v${imported.version})` : ''}.`
+      message: `Пакет темы импортирован${imported.version ? ` (v${imported.version})` : ''}.`
     })
   }
 
@@ -9778,7 +9817,7 @@ export default function App() {
       setAppearanceImportJson(text)
       applyImportedUiThemePack(text)
     } catch (err) {
-      setStatus({ type: 'error', message: 'Failed to read JSON file.' })
+      setStatus({ type: 'error', message: 'Не удалось прочитать JSON-файл.' })
     } finally {
       if (event.target) event.target.value = ''
     }
@@ -10907,14 +10946,14 @@ export default function App() {
       icon: '🎨',
       label: 'Оформление',
       description: 'Сцены, палитра и плотность интерфейса',
-      badge: uiPreferences.style
+      badge: getUiStyleLabel(uiPreferences.style)
     },
     {
       id: 'privacy',
       group: 'protection',
       icon: '🔒',
       label: 'Конфиденциальность',
-      description: 'Mute, block и правила видимости',
+      description: isEnglishUi ? 'Mute, block and visibility rules' : 'Мут, блокировки и правила видимости',
       badge: privacyControls.length > 0 ? String(privacyControls.length) : ''
     },
     {
@@ -10922,7 +10961,7 @@ export default function App() {
       group: 'protection',
       icon: '🛡️',
       label: '2FA и защита',
-      description: 'Коды, backup codes и защита входа',
+      description: isEnglishUi ? 'Codes, backup codes and login safety' : 'Коды, резервные коды и защита входа',
       badge: twoFactorStatus.enabled ? '2FA' : ''
     },
     {
@@ -10963,17 +11002,19 @@ export default function App() {
       icon: '🌐',
       label: 'Язык',
       description: 'Текущая локаль интерфейса',
-      badge: 'RU'
+      badge: appLanguage.toUpperCase()
     },
     {
       id: 'support',
       group: 'library',
       icon: '❓',
       label: 'Помощь',
-      description: 'FAQ, ссылки и внешний help desk',
+      description: isEnglishUi ? 'FAQ, links and external help desk' : 'FAQ, ссылки и внешний центр помощи',
       badge: ''
     }
   ]), [
+    appLanguage,
+    isEnglishUi,
     myStickers.length,
     privacyControls.length,
     pushState.enabled,
@@ -10991,15 +11032,15 @@ export default function App() {
   }, [settingsNavItems, settingsNavQueryNormalized])
   const settingsVisibleNavGroups = useMemo(() => {
     const groups = [
-      { id: 'workspace', label: 'Workspace', summary: 'Профиль, сигналы и визуальный слой' },
-      { id: 'protection', label: 'Protection', summary: 'Защита входа и privacy control' },
-      { id: 'library', label: 'Storage & help', summary: 'Локальные данные, язык и поддержка' }
+      { id: 'workspace', label: isEnglishUi ? 'Workspace' : 'Рабочее пространство', summary: isEnglishUi ? 'Profile, signals and visual layer' : 'Профиль, сигналы и визуальный слой' },
+      { id: 'protection', label: isEnglishUi ? 'Protection' : 'Защита', summary: isEnglishUi ? 'Login safety and privacy control' : 'Защита входа и контроль приватности' },
+      { id: 'library', label: isEnglishUi ? 'Storage & help' : 'Хранилище и помощь', summary: isEnglishUi ? 'Local data, language and support' : 'Локальные данные, язык и поддержка' }
     ]
     return groups.map((group) => ({
       ...group,
       items: settingsVisibleNavItems.filter((item) => item.group === group.id)
     })).filter((group) => group.items.length > 0)
-  }, [settingsVisibleNavItems])
+  }, [isEnglishUi, settingsVisibleNavItems])
   const settingsQuickTabs = useMemo(() => (
     settingsNavItems.filter((item) => (
       item.id === 'general' ||
@@ -11018,7 +11059,7 @@ export default function App() {
       general: 'Базовые параметры аккаунта и быстрые действия.',
       notifications: 'Управление push-уведомлениями и сигналами активности.',
       appearance: 'Тема, плотность и визуальный стиль интерфейса.',
-      privacy: 'Персональные ограничения: mute, block, hide profile, deny DM.',
+      privacy: isEnglishUi ? 'Personal limits: mute, block, hide profile, deny DM.' : 'Персональные ограничения: мут, блок, скрытие профиля и запрет DM.',
       security: '2FA, резервные коды и защита входа в аккаунт.',
       password: 'Смена пароля с ревокацией остальных сессий.',
       sessions: 'Список устройств и завершение любых входов.',
@@ -11028,52 +11069,61 @@ export default function App() {
       support: 'Справка, FAQ и полезные ссылки.'
     }
     return hints[settingsSection] || 'Управление настройками аккаунта.'
-  }, [settingsSection])
+  }, [isEnglishUi, settingsSection])
   const settingsPushBadge = pushState.enabled
-    ? 'Push ON'
+    ? uiText('Push: вкл', 'Push ON')
     : pushState.permission === 'denied'
-      ? 'Blocked'
-      : 'Push OFF'
-  const settingsIdentityBadge = theme === 'dark' ? 'Dark' : 'Light'
-  const settingsSecurityBadge = twoFactorStatus.enabled ? '2FA ON' : '2FA OFF'
+      ? uiText('Заблокировано', 'Blocked')
+      : uiText('Push: выкл', 'Push OFF')
+  const settingsIdentityBadge = theme === 'dark'
+    ? uiText('Тёмная', 'Dark')
+    : uiText('Светлая', 'Light')
+  const settingsSecurityBadge = twoFactorStatus.enabled
+    ? uiText('2FA вкл', '2FA ON')
+    : uiText('2FA выкл', '2FA OFF')
   const settingsStatusChips = useMemo(() => {
     const chips = []
-    if (user && user.isVerified) chips.push({ id: 'verified', tone: 'success', label: 'Verified' })
+    if (user && user.isVerified) chips.push({ id: 'verified', tone: 'success', label: uiText('Проверен', 'Verified') })
     if (currentUserIsOwner) {
-      chips.push({ id: 'owner', tone: 'accent', label: 'Owner' })
+      chips.push({ id: 'owner', tone: 'accent', label: uiText('Владелец', 'Owner') })
     } else if (user && user.isAdmin) {
-      chips.push({ id: 'admin', tone: 'accent', label: 'Admin' })
+      chips.push({ id: 'admin', tone: 'accent', label: uiText('Админ', 'Admin') })
     }
-    if (twoFactorStatus.enabled) chips.push({ id: '2fa', tone: 'success', label: '2FA ON' })
+    if (twoFactorStatus.enabled) chips.push({ id: '2fa', tone: 'success', label: uiText('2FA вкл', '2FA ON') })
     chips.push({ id: 'push', tone: pushState.enabled ? 'accent' : 'muted', label: settingsPushBadge })
     return chips
-  }, [currentUserIsOwner, pushState.enabled, settingsPushBadge, twoFactorStatus.enabled, user])
+  }, [currentUserIsOwner, isEnglishUi, pushState.enabled, settingsPushBadge, twoFactorStatus.enabled, user])
   const settingsWorkspaceStats = useMemo(() => ([
     {
       id: 'security',
-      label: 'Security',
+      label: uiText('Защита', 'Security'),
       value: settingsSecurityBadge,
-      meta: `${settingsActiveSessionCount} session${settingsActiveSessionCount === 1 ? '' : 's'}`
+      meta: isEnglishUi
+        ? `${settingsActiveSessionCount} session${settingsActiveSessionCount === 1 ? '' : 's'}`
+        : `${settingsActiveSessionCount} ${settingsActiveSessionCount === 1 ? 'сеанс' : 'сеансов'}`
     },
     {
       id: 'privacy',
-      label: 'Privacy',
+      label: uiText('Приватность', 'Privacy'),
       value: privacyControls.length > 0 ? `${privacyControls.length}` : '0',
-      meta: privacyControls.length > 0 ? 'custom rules' : 'rules'
+      meta: privacyControls.length > 0
+        ? uiText('свои правила', 'custom rules')
+        : uiText('правила', 'rules')
     },
     {
       id: 'style',
-      label: 'Style',
-      value: uiPreferences.style,
-      meta: `${settingsIdentityBadge} mode`
+      label: uiText('Стиль', 'Style'),
+      value: getUiStyleLabel(uiPreferences.style),
+      meta: isEnglishUi ? `${settingsIdentityBadge} mode` : `${settingsIdentityBadge} режим`
     },
     {
       id: 'library',
-      label: 'Library',
+      label: uiText('Медиатека', 'Library'),
       value: `${myStickers.length + myGifs.length}`,
-      meta: 'stickers + GIF'
+      meta: uiText('стикеры + GIF', 'stickers + GIF')
     }
   ]), [
+    isEnglishUi,
     myGifs.length,
     myStickers.length,
     privacyControls.length,
@@ -11110,7 +11160,9 @@ export default function App() {
               className={pushButtonClass}
               onClick={handlePushToggle}
               disabled={pushButtonDisabled}
-              title={pushState.permission === 'denied' ? 'Allow notifications in browser settings' : 'Manage notifications'}
+              title={pushState.permission === 'denied'
+                ? uiText('Разрешите уведомления в настройках браузера', 'Allow notifications in browser settings')
+                : uiText('Управление уведомлениями', 'Manage notifications')}
             >
               {pushButtonLabel}
             </button>
@@ -11119,10 +11171,10 @@ export default function App() {
                 type="button"
                 className={`pulse-toggle ${view === 'pulse' ? 'active' : ''}`.trim()}
                 onClick={() => openPulseWorkspace()}
-                title="Pulse workspace"
+                title={uiText('Рабочее пространство Pulse', 'Pulse workspace')}
               >
                 <span>{pulsePriorityCount > 99 ? '99+' : pulsePriorityCount}</span>
-                Pulse
+                {uiText('Пульс', 'Pulse')}
               </button>
             ) : null}
             {user ? (
@@ -11536,7 +11588,7 @@ export default function App() {
                 </div>
                 <div className="dashboard-functional-status">
                   <span className={`dashboard-functional-chip ${socketConnection === 'connected' ? 'state-ok' : socketConnection === 'connecting' ? 'state-warn' : 'state-danger'}`.trim()}>
-                    Realtime: {socketConnection === 'connected' ? 'ON' : socketConnection === 'connecting' ? '...' : 'OFF'}
+                    {uiText('Realtime', 'Realtime')}: {socketConnection === 'connected' ? 'ON' : socketConnection === 'connecting' ? '...' : 'OFF'}
                   </span>
                   <span className={`dashboard-functional-chip ${pushState.enabled ? 'state-ok' : 'state-warn'}`.trim()}>
                     Push: {pushState.enabled ? 'ON' : pushState.supported ? 'OFF' : 'N/A'}
@@ -11555,7 +11607,7 @@ export default function App() {
               <article className="dashboard-mission-panel">
                 <div className="dashboard-card-head">
                   <div>
-                    <strong>Mission Control</strong>
+                    <strong>{uiText('Центр миссии', 'Mission Control')}</strong>
                     <span>{dashboardWorkbenchSummary.description}</span>
                   </div>
                   <span className="dashboard-mission-badge">{dashboardWorkbenchSummary.badge}</span>
@@ -11563,12 +11615,12 @@ export default function App() {
                 <div className="dashboard-mission-hero">
                   <div className="dashboard-mission-score">
                     <strong>{dashboardWorkspaceScore}</strong>
-                    <span>workspace score</span>
+                    <span>{uiText('индекс пространства', 'workspace score')}</span>
                   </div>
                   <div className="dashboard-mission-copy">
                     <span className="dashboard-mission-kicker">{dashboardWorkbenchSummary.title}</span>
                     <h3>Выбери рабочую полосу и держи весь стек под рукой.</h3>
-                    <div className="dashboard-workbench-switch" role="tablist" aria-label="Dashboard workbench mode">
+                    <div className="dashboard-workbench-switch" role="tablist" aria-label={uiText('Режим рабочей полосы', 'Dashboard workbench mode')}>
                       {DASHBOARD_WORKBENCH_MODE_OPTIONS.map((mode) => (
                         <button
                           key={mode.value}
@@ -11576,8 +11628,8 @@ export default function App() {
                           className={dashboardWorkbenchMode === mode.value ? 'active' : ''}
                           onClick={() => updateDashboardWorkbenchMode(mode.value)}
                         >
-                          <strong>{mode.label}</strong>
-                          <small>{mode.hint}</small>
+                          <strong>{getWorkbenchModeLabel(mode)}</strong>
+                          <small>{getWorkbenchModeHint(mode)}</small>
                         </button>
                       ))}
                     </div>
@@ -11609,10 +11661,10 @@ export default function App() {
               <article className="dashboard-scratchpad-panel">
                 <div className="dashboard-card-head">
                   <div>
-                    <strong>Scratchpad</strong>
+                    <strong>{uiText('Блокнот', 'Scratchpad')}</strong>
                     <span>локальные заметки, быстрые формулировки и подготовка к посту</span>
                   </div>
-                  <span className="dashboard-scratchpad-meta">{String(dashboardScratchpad || '').trim().length} chars</span>
+                  <span className="dashboard-scratchpad-meta">{String(dashboardScratchpad || '').trim().length} {uiText('симв.', 'chars')}</span>
                 </div>
                 <textarea
                   value={dashboardScratchpad}
@@ -11637,7 +11689,7 @@ export default function App() {
                     className="primary"
                     onClick={() => runDashboardWorkbenchAction('compose', { template: dashboardScratchpad })}
                   >
-                    В composer
+                    {uiText('В редактор', 'To composer')}
                   </button>
                   <button type="button" className="ghost" onClick={() => setDashboardScratchpad('')}>
                     Очистить
@@ -11704,7 +11756,7 @@ export default function App() {
               <article className="dashboard-functional-card">
                 <div className="dashboard-card-head">
                   <div>
-                    <strong>Next moves</strong>
+                    <strong>{uiText('Следующие шаги', 'Next moves')}</strong>
                     <span>что стоит сделать прямо сейчас</span>
                   </div>
                 </div>
@@ -11733,7 +11785,7 @@ export default function App() {
                     Закладки
                   </button>
                   <button type="button" className="ghost" onClick={() => openPulseWorkspace(PULSE_TABS.priority)}>
-                    Pulse
+                    {uiText('Пульс', 'Pulse')}
                   </button>
                   <button type="button" className="ghost" onClick={() => runDashboardWorkbenchAction('settings')}>
                     Настройки
@@ -11766,7 +11818,7 @@ export default function App() {
                   </div>
                   <div className="dashboard-functional-preset-row">
                     <button type="button" className="ghost" onClick={() => openFeedFocus({ filter: FEED_FILTERS.all, sortMode: FEED_SORT_MODES.smart })}>
-                      Smart
+                      {uiText('Умный', 'Smart')}
                     </button>
                     <button type="button" className="ghost" onClick={() => openFeedFocus({ filter: FEED_FILTERS.all, sortMode: FEED_SORT_MODES.latest })}>
                       Новые
@@ -11936,56 +11988,56 @@ export default function App() {
           <div className="pulse-layout">
             <section className="pulse-hero">
               <div className="pulse-hero-main">
-                <span className="pulse-kicker">Activity workspace</span>
-                <h2>Pulse</h2>
-                <p>One board for unread chats, feed signals, profile tasks and system attention points.</p>
+                <span className="pulse-kicker">{uiText('Пространство активности', 'Activity workspace')}</span>
+                <h2>{uiText('Пульс', 'Pulse')}</h2>
+                <p>{uiText('Одна доска для непрочитанных чатов, сигналов ленты, задач профиля и системных точек внимания.', 'One board for unread chats, feed signals, profile tasks and system attention points.')}</p>
                 <div className="pulse-hero-stats">
                   <article>
-                    <span>Health</span>
+                    <span>{uiText('Состояние', 'Health')}</span>
                     <strong>{pulseWorkspaceHealth}</strong>
                   </article>
                   <article>
-                    <span>Open queue</span>
+                    <span>{uiText('Открытая очередь', 'Open queue')}</span>
                     <strong>{pulseActiveItems.length}</strong>
                   </article>
                   <article>
-                    <span>Priority</span>
+                    <span>{uiText('Приоритет', 'Priority')}</span>
                     <strong>{pulsePriorityCount}</strong>
                   </article>
                   <article>
-                    <span>Resolved</span>
+                    <span>{uiText('Закрыто', 'Resolved')}</span>
                     <strong>{pulseResolvedCount}</strong>
                   </article>
                 </div>
               </div>
               <div className="pulse-hero-actions">
                 <label className="pulse-search">
-                  <span>Search</span>
+                  <span>{uiText('Поиск', 'Search')}</span>
                   <input
                     type="text"
                     value={pulseQuery}
                     onChange={(event) => setPulseQuery(event.target.value)}
-                    placeholder="Filter by title, lane or detail"
+                    placeholder={uiText('Фильтр по заголовку, зоне или деталям', 'Filter by title, lane or detail')}
                   />
                 </label>
                 <div className="pulse-hero-buttons">
                   <button type="button" className="ghost" onClick={() => openPulseWorkspace(PULSE_TABS.priority)}>
-                    Priority
+                    {uiText('Приоритет', 'Priority')}
                   </button>
                   <button type="button" className="ghost" onClick={() => runDashboardFocusAction('unread')}>
-                    Unread chats
+                    {uiText('Непрочитанные чаты', 'Unread chats')}
                   </button>
                   <button type="button" className="ghost" onClick={() => runDashboardWorkbenchAction('compose')}>
-                    Compose
+                    {uiText('Написать пост', 'Compose')}
                   </button>
                   <button type="button" className="primary" onClick={refreshWorkspaceSnapshot} disabled={dashboardRefreshLoading}>
-                    {dashboardRefreshLoading ? 'Syncing...' : 'Sync pulse'}
+                    {dashboardRefreshLoading ? uiText('Синхронизация...', 'Syncing...') : uiText('Синхронизировать Pulse', 'Sync pulse')}
                   </button>
                 </div>
               </div>
             </section>
 
-            <section className="pulse-tabs" role="tablist" aria-label="Pulse filters">
+            <section className="pulse-tabs" role="tablist" aria-label={uiText('Фильтры Pulse', 'Pulse filters')}>
               {PULSE_TAB_OPTIONS.map((item) => (
                 <button
                   key={`pulse-tab-${item.value}`}
@@ -11995,16 +12047,16 @@ export default function App() {
                   className={pulseTab === item.value ? 'active' : ''}
                   onClick={() => setPulseTab(item.value)}
                 >
-                  <strong>{item.label}</strong>
-                  <small>{item.hint}</small>
+                  <strong>{getPulseTabLabel(item)}</strong>
+                  <small>{getPulseTabHint(item)}</small>
                   <span>{pulseTabCounts[item.value] || 0}</span>
                 </button>
               ))}
             </section>
 
-            <section className="pulse-focus-strip" aria-label="Priority lane">
+            <section className="pulse-focus-strip" aria-label={uiText('Приоритетная полоса', 'Priority lane')}>
               {pulsePriorityItems.length === 0 ? (
-                <div className="pulse-empty-note">Priority lane is clear. Use Pulse as a calmer overview board.</div>
+                <div className="pulse-empty-note">{uiText('Приоритетная полоса спокойна. Используй Pulse как обзорную доску без шума.', 'Priority lane is clear. Use Pulse as a calmer overview board.')}</div>
               ) : (
                 pulsePriorityItems.map((item) => (
                   <article key={`pulse-focus-${item.id}`} className={`pulse-focus-card tone-${item.tone}`.trim()}>
@@ -12024,10 +12076,10 @@ export default function App() {
                 <article className="pulse-side-card">
                   <div className="pulse-card-head">
                     <div>
-                      <strong>Lane mix</strong>
-                      <span>Open items by domain</span>
+                      <strong>{uiText('Состав зон', 'Lane mix')}</strong>
+                      <span>{uiText('Открытые пункты по доменам', 'Open items by domain')}</span>
                     </div>
-                    <small>{pulseActiveItems.length} total</small>
+                    <small>{pulseActiveItems.length} {uiText('всего', 'total')}</small>
                   </div>
                   <div className="pulse-lane-list">
                     {[PULSE_TABS.chats, PULSE_TABS.feed, PULSE_TABS.profile, PULSE_TABS.system].map((lane) => (
@@ -12047,27 +12099,27 @@ export default function App() {
                 <article className="pulse-side-card">
                   <div className="pulse-card-head">
                     <div>
-                      <strong>Control room</strong>
-                      <span>Quick routes across the workspace</span>
+                      <strong>{uiText('Контрольная комната', 'Control room')}</strong>
+                      <span>{uiText('Быстрые маршруты по пространству', 'Quick routes across the workspace')}</span>
                     </div>
-                    <small>{pulseResolvedCount} done</small>
+                    <small>{pulseResolvedCount} {uiText('готово', 'done')}</small>
                   </div>
                   <div className="pulse-control-stack">
                     <button type="button" className="ghost" onClick={() => runDashboardFocusAction('unread')}>
-                      Open unread chats
+                      {uiText('Открыть непрочитанные чаты', 'Open unread chats')}
                     </button>
                     <button type="button" className="ghost" onClick={() => openFeedFocus({ filter: FEED_FILTERS.popular, sortMode: FEED_SORT_MODES.engagement, timeWindow: FEED_TIME_WINDOWS.week })}>
-                      Open hot feed
+                      {uiText('Открыть горячую ленту', 'Open hot feed')}
                     </button>
                     <button type="button" className="ghost" onClick={() => setView('profile')}>
-                      Profile lab
+                      {uiText('Профиль', 'Profile lab')}
                     </button>
                     <button type="button" className="ghost" onClick={() => setView('dashboard')}>
-                      Mission control
+                      {uiText('Рабочая панель', 'Mission control')}
                     </button>
                     {pulseResolvedCount > 0 && (
                       <button type="button" className="ghost" onClick={restoreAllPulseItems}>
-                        Restore resolved
+                        {uiText('Вернуть закрытые', 'Restore resolved')}
                       </button>
                     )}
                   </div>
@@ -12077,8 +12129,8 @@ export default function App() {
                   <article className="pulse-side-card">
                     <div className="pulse-card-head">
                       <div>
-                        <strong>Pinned focus</strong>
-                        <span>Items you decided to keep nearby</span>
+                        <strong>{uiText('Закреплённый фокус', 'Pinned focus')}</strong>
+                        <span>{uiText('Пункты, которые ты решил держать рядом', 'Items you decided to keep nearby')}</span>
                       </div>
                       <small>{pulsePinnedPreviewItems.length}</small>
                     </div>
@@ -12102,16 +12154,16 @@ export default function App() {
               <section className="pulse-board">
                 <div className="pulse-card-head pulse-board-head">
                   <div>
-                    <strong>{PULSE_TAB_OPTIONS.find((item) => item.value === pulseTab)?.label || 'Pulse'}</strong>
-                    <span>{pulseVisibleItems.length} items in the current scope</span>
+                    <strong>{getPulseTabLabel(PULSE_TAB_OPTIONS.find((item) => item.value === pulseTab) || { label: 'Pulse', labelRu: 'Пульс' })}</strong>
+                    <span>{pulseVisibleItems.length} {uiText('пунктов в текущем срезе', 'items in the current scope')}</span>
                   </div>
-                  <small>{pulseQueryNormalized ? `query: ${pulseQueryNormalized}` : pulseWorkspaceHealth}</small>
+                  <small>{pulseQueryNormalized ? `${uiText('запрос', 'query')}: ${pulseQueryNormalized}` : pulseWorkspaceHealth}</small>
                 </div>
 
                 {pulseVisibleItems.length === 0 ? (
                   <div className="pulse-empty-state">
-                    <strong>No items in this view.</strong>
-                    <span>Change filter, clear search, or restore resolved items to rebuild the board.</span>
+                    <strong>{uiText('В этом режиме пока пусто.', 'No items in this view.')}</strong>
+                    <span>{uiText('Смени фильтр, очисти поиск или верни закрытые пункты, чтобы собрать доску заново.', 'Change filter, clear search, or restore resolved items to rebuild the board.')}</span>
                   </div>
                 ) : (
                   <div className="pulse-list">
@@ -12136,14 +12188,14 @@ export default function App() {
                                 type="button"
                                 className={isPinned ? 'active' : ''}
                                 onClick={() => togglePulsePin(item.id)}
-                                title={isPinned ? 'Unpin item' : 'Pin item'}
+                                title={isPinned ? uiText('Открепить пункт', 'Unpin item') : uiText('Закрепить пункт', 'Pin item')}
                               >
                                 {isPinned ? '★' : '☆'}
                               </button>
                               <button
                                 type="button"
                                 onClick={() => (isArchived ? restorePulseItem(item.id) : dismissPulseItem(item.id))}
-                                title={isArchived ? 'Restore item' : 'Resolve item'}
+                                title={isArchived ? uiText('Вернуть пункт', 'Restore item') : uiText('Закрыть пункт', 'Resolve item')}
                               >
                                 {isArchived ? '↺' : '✓'}
                               </button>
@@ -12163,7 +12215,7 @@ export default function App() {
                             </div>
                           )}
                           <div className="pulse-item-footer">
-                            <span>{item.meta || 'Open item'}</span>
+                            <span>{item.meta || uiText('Открыть пункт', 'Open item')}</span>
                             <button type="button" className="ghost" onClick={() => runPulseAction(item)}>
                               {item.cta}
                             </button>
@@ -12183,13 +12235,13 @@ export default function App() {
             <section className="chat-list">
               <div className="chat-list-hero">
                 <div className="chat-list-hero-main">
-                  <span className="chat-list-hero-overline">Conversations</span>
-                  <strong>Message Center</strong>
+                  <span className="chat-list-hero-overline">{uiText('Диалоги', 'Conversations')}</span>
+                  <strong>{uiText('Центр сообщений', 'Message Center')}</strong>
                 </div>
                 <div className="chat-list-hero-stats">
-                  <span>{conversations.length} total</span>
-                  <span>{unreadConversationCount} unread</span>
-                  <span>{favoriteConversationCount} favorites</span>
+                  <span>{conversations.length} {uiText('всего', 'total')}</span>
+                  <span>{unreadConversationCount} {uiText('непрочитанных', 'unread')}</span>
+                  <span>{favoriteConversationCount} {uiText('избранных', 'favorites')}</span>
                 </div>
               </div>
               <div className="chat-search">
@@ -12534,13 +12586,13 @@ export default function App() {
                       <div className="chat-blocked">
                         <span>
                           {activeConversationPrivacy.isBlocked
-                            ? 'You blocked this user.'
+                            ? 'Вы заблокировали этого пользователя.'
                             : (activeConversationPrivacy.blockedByTarget
-                              ? 'This user blocked you.'
-                              : 'Direct messages are blocked by privacy settings.')}
+                              ? 'Этот пользователь заблокировал вас.'
+                              : 'Личные сообщения заблокированы настройками приватности.')}
                         </span>
                         {activeConversationPrivacy.isBlocked && (
-                          <button type="button" onClick={toggleChatBlock}>Unblock</button>
+                          <button type="button" onClick={toggleChatBlock}>Разблокировать</button>
                         )}
                       </div>
                     )}
@@ -13919,7 +13971,7 @@ export default function App() {
                     updateFeedExplorer({ sortMode: FEED_SORT_MODES.smart })
                   }}
                 >
-                  ⚡ Smart reset scope
+                  ⚡ Умный сброс фильтров
                 </button>
               </div>
 
@@ -14074,7 +14126,7 @@ export default function App() {
                       <div className="empty small">Пока нет данных</div>
                     ) : (
                       <div className="feed-author-list">
-                        {topFeedAuthors.map((author) => (
+                    {topFeedAuthors.map((author) => (
                           <button
                             key={`feed-top-author-${author.id}`}
                             type="button"
@@ -14082,7 +14134,7 @@ export default function App() {
                             onClick={() => toggleFeedAuthorFilter(author.id)}
                           >
                             <span>{author.displayName || author.username}</span>
-                            <small>{author.engagement} pts</small>
+                            <small>{author.engagement} очк.</small>
                           </button>
                         ))}
                       </div>
@@ -14091,7 +14143,7 @@ export default function App() {
                   <div className="feed-radar-card">
                     <div className="feed-radar-head">
                       <strong>Горячие посты</strong>
-                      <span>live</span>
+                      <span>онлайн</span>
                     </div>
                     {hotFeedPosts.length === 0 ? (
                       <div className="empty small">Пока тихо</div>
@@ -14105,7 +14157,7 @@ export default function App() {
                             onClick={() => openProfile(item.post.author.username)}
                           >
                             <span>{item.post.author.displayName || item.post.author.username}</span>
-                            <small>{item.score} pts</small>
+                            <small>{item.score} очк.</small>
                           </button>
                         ))}
                       </div>
@@ -14173,10 +14225,10 @@ export default function App() {
                     </div>
                   </button>
                   <div className="feed-card-insights">
-                    <span className="feed-score-chip">⚡ {postEngagementScore} pts</span>
-                    {postIsFresh && <span className="feed-score-chip fresh">new</span>}
-                    {post.imageUrl && <span className="feed-score-chip media">media</span>}
-                    {post.repostOf && <span className="feed-score-chip repost">repost</span>}
+                    <span className="feed-score-chip">⚡ {postEngagementScore} очк.</span>
+                    {postIsFresh && <span className="feed-score-chip fresh">новое</span>}
+                    {post.imageUrl && <span className="feed-score-chip media">медиа</span>}
+                    {post.repostOf && <span className="feed-score-chip repost">репост</span>}
                   </div>
                   {post.body && <p>{renderHighlightedText(post.body, feedQueryNormalized)}</p>}
                   {post.imageUrl && (
@@ -14304,10 +14356,10 @@ export default function App() {
         )}
         {view === 'profile-view' && (
           <div className="profile-page">
-            <button type="button" className="ghost" onClick={() => setView(profileBackView || 'feed')}>Back</button>
+            <button type="button" className="ghost" onClick={() => setView(profileBackView || 'feed')}>Назад</button>
             {profileLoading && !profileView && (
               <div className="panel">
-                <div className="empty">Loading profile...</div>
+                <div className="empty">Загрузка профиля...</div>
               </div>
             )}
             {profileView && (
@@ -14336,7 +14388,7 @@ export default function App() {
                       <h2 className="profile-hero-name">
                         {profileView.displayName || profileView.username}
                         {profileView.isVerified && <span className="verified-mark" title="Верифицированный профиль">✓</span>}
-                        {profileViewShowsRole && isOwnerUser(profileView) && <span className="owner-mark" title="Owner">*</span>}
+                        {profileViewShowsRole && isOwnerUser(profileView) && <span className="owner-mark" title="Владелец">*</span>}
                       </h2>
                       <span>@{profileView.username}</span>
                       {profileViewRoleLabels.length > 0 && (
@@ -14353,11 +14405,11 @@ export default function App() {
                     {profileShowcase.headline && <p className="profile-headline">{profileShowcase.headline}</p>}
                     {profileView.bio && <p>{profileView.bio}</p>}
                     <div className="profile-stats">
-                      <span><strong>{profileFollowers}</strong> followers</span>
-                      <span><strong>{profileFollowing}</strong> following</span>
-                      <span><strong>{profileTracksCount}</strong> tracks</span>
-                      <span><strong>{profilePosts.length}</strong> posts</span>
-                      {profileJoinedAt && <span>since {profileJoinedAt}</span>}
+                      <span><strong>{profileFollowers}</strong> подписчиков</span>
+                      <span><strong>{profileFollowing}</strong> подписок</span>
+                      <span><strong>{profileTracksCount}</strong> треков</span>
+                      <span><strong>{profilePosts.length}</strong> постов</span>
+                      {profileJoinedAt && <span>с {profileJoinedAt}</span>}
                     </div>
                   </div>
                   <div className="profile-actions-row">
@@ -14369,14 +14421,14 @@ export default function App() {
                           onClick={handleToggleSubscription}
                           disabled={loading}
                         >
-                          {profileView.isSubscribed ? 'Unsubscribe' : 'Subscribe'}
+                          {profileView.isSubscribed ? 'Отписаться' : 'Подписаться'}
                         </button>
                         <button
                           type="button"
                           className="ghost"
                           onClick={handleMessageFromProfile}
                           disabled={loading || profileMessagingBlocked}
-                          title={profileMessagingBlocked ? 'Direct messages are blocked by privacy settings' : 'Open chat'}
+                          title={profileMessagingBlocked ? 'Личные сообщения заблокированы настройками приватности' : 'Открыть чат'}
                         >
                           Написать
                         </button>
@@ -14385,9 +14437,9 @@ export default function App() {
                           className="ghost"
                           onClick={handleSendProfileWave}
                           disabled={loading || profileMessagingBlocked}
-                          title={profileMessagingBlocked ? 'Direct messages are blocked by privacy settings' : 'Send wave'}
+                          title={profileMessagingBlocked ? 'Личные сообщения заблокированы настройками приватности' : 'Отправить волну'}
                         >
-                          Wave 👋
+                          Вейв 👋
                         </button>
                       </>
                     )}
@@ -14536,7 +14588,7 @@ export default function App() {
                 </div>
                 <div className="feed-list">
                   {visibleProfilePosts.length === 0 && (
-                    <div className="empty">No posts yet.</div>
+                    <div className="empty">Постов пока нет.</div>
                   )}
                   {visibleProfilePosts.map((post) => (
                     <article
@@ -14549,7 +14601,7 @@ export default function App() {
                       onTouchCancel={handleTouchContextMenuCancel}
                     >
                       {post.repostOf && (
-                        <div className="repost-badge">Repost</div>
+                        <div className="repost-badge">Репост</div>
                       )}
                       <div className="feed-header">
                         <div
@@ -14581,7 +14633,7 @@ export default function App() {
                       )}
                       {post.repostOf && (
                         <div className="repost-card">
-                          <div className="repost-label">Repost</div>
+                          <div className="repost-label">Репост</div>
                           <div className="repost-meta">
                             @{post.repostOf.authorUsername}
                           </div>
@@ -14612,9 +14664,9 @@ export default function App() {
                           className={`${post.reposted ? 'active' : ''} ${isOwnRepostPost(post) ? 'disabled' : ''}`.trim()}
                           onClick={() => handleRepostPost(post.id)}
                           disabled={isOwnRepostPost(post)}
-                          title={isOwnRepostPost(post) ? 'Cannot repost your own repost' : 'Repost'}
+                          title={isOwnRepostPost(post) ? 'Нельзя репостить свой собственный репост' : 'Репост'}
                         >
-                          Repost {post.repostsCount}
+                          Репост {post.repostsCount}
                         </button>
                         <button
                           type="button"
@@ -15520,28 +15572,28 @@ export default function App() {
                 )}
                 {settingsSection === 'appearance' && (
                   <section className="settings-pane">
-                    <h2>Appearance</h2>
-                    <p className="subtitle">Theme mode, density, radii and accent colors.</p>
+                    <h2>{uiText('Оформление', 'Appearance')}</h2>
+                    <p className="subtitle">{uiText('Режим темы, плотность, радиусы и акцентные цвета.', 'Theme mode, density, radii and accent colors.')}</p>
                     <section className="ui-studio appearance-studio">
                       <div className="ui-studio-grid">
                         <label>
-                          Style
+                          {uiText('Стиль', 'Style')}
                           <select value={uiPreferences.style} onChange={(event) => updateUiPreference('style', event.target.value)}>
                             {UI_STYLE_OPTIONS.map((item) => (
-                              <option key={item.value} value={item.value}>{item.label}</option>
+                              <option key={item.value} value={item.value}>{getUiStyleLabel(item.value)}</option>
                             ))}
                           </select>
                         </label>
                         <label>
-                          Density
+                          {uiText('Плотность', 'Density')}
                           <select value={uiPreferences.density} onChange={(event) => updateUiPreference('density', event.target.value)}>
                             {UI_DENSITY_OPTIONS.map((item) => (
-                              <option key={item.value} value={item.value}>{item.label}</option>
+                              <option key={item.value} value={item.value}>{getUiDensityLabel(item.value)}</option>
                             ))}
                           </select>
                         </label>
                         <label>
-                          Ambient intensity: {uiPreferences.ambient}
+                          {uiText('Интенсивность окружения', 'Ambient intensity')}: {uiPreferences.ambient}
                           <input
                             type="range"
                             min={0}
@@ -15552,7 +15604,7 @@ export default function App() {
                           />
                         </label>
                         <label>
-                          Card radius: {Math.round(uiPreferences.radius)}px
+                          {uiText('Радиус карточек', 'Card radius')}: {Math.round(uiPreferences.radius)}px
                           <input
                             type="range"
                             min={12}
@@ -15563,7 +15615,7 @@ export default function App() {
                           />
                         </label>
                         <label>
-                          Border intensity: {Math.round(uiPreferences.lineStrength)}%
+                          {uiText('Интенсивность границ', 'Border intensity')}: {Math.round(uiPreferences.lineStrength)}%
                           <input
                             type="range"
                             min={35}
@@ -15581,14 +15633,14 @@ export default function App() {
                           className={theme === 'dark' ? 'active' : ''}
                           onClick={() => setTheme('dark')}
                         >
-                          Dark
+                          {uiText('Тёмная', 'Dark')}
                         </button>
                         <button
                           type="button"
                           className={theme === 'light' ? 'active' : ''}
                           onClick={() => setTheme('light')}
                         >
-                          Light
+                          {uiText('Светлая', 'Light')}
                         </button>
                       </div>
 
@@ -15598,7 +15650,7 @@ export default function App() {
                           checked={uiPreferences.syncAccent}
                           onChange={(event) => updateUiPreference('syncAccent', event.target.checked)}
                         />
-                        Sync accents with profile color (auto mode)
+                        {uiText('Синхронизировать акценты с цветом профиля (авторежим)', 'Sync accents with profile color (auto mode)')}
                       </label>
 
                       <label className="ui-studio-toggle">
@@ -15607,7 +15659,7 @@ export default function App() {
                           checked={uiPreferences.outlineMode === 'custom'}
                           onChange={(event) => updateUiPreference('outlineMode', event.target.checked ? 'custom' : 'auto')}
                         />
-                        Custom outline color (manual mode)
+                        {uiText('Свой цвет контура (ручной режим)', 'Custom outline color (manual mode)')}
                       </label>
 
                       <label className="ui-studio-toggle">
@@ -15616,7 +15668,7 @@ export default function App() {
                           checked={uiPreferences.customPalette}
                           onChange={(event) => updateUiPreference('customPalette', event.target.checked)}
                         />
-                        Custom surface palette (bg/panel/card/text)
+                        {uiText('Своя палитра поверхностей (фон/панель/карточка/текст)', 'Custom surface palette (bg/panel/card/text)')}
                       </label>
 
                       <label className="ui-studio-toggle">
@@ -15625,20 +15677,20 @@ export default function App() {
                           checked={uiPreferences.glowEnabled}
                           onChange={(event) => updateUiPreference('glowEnabled', event.target.checked)}
                         />
-                        Glow for active tabs/buttons
+                        {uiText('Свечение для активных вкладок и кнопок', 'Glow for active tabs/buttons')}
                       </label>
 
                       <div className="ui-studio-actions">
                         <button type="button" className="ghost" onClick={enableFullUiCustomization}>
-                          Enable full customization
+                          {uiText('Включить полную кастомизацию', 'Enable full customization')}
                         </button>
                       </div>
 
                       <section className="appearance-scene-block">
                         <div className="appearance-scene-head">
-                          <strong>Style scenes</strong>
+                          <strong>{uiText('Сцены стиля', 'Style scenes')}</strong>
                           <button type="button" className="ghost appearance-scene-random" onClick={applyRandomUiScenePreset}>
-                            Surprise me
+                            {uiText('Удивить', 'Surprise me')}
                           </button>
                         </div>
                         <div className="appearance-scene-grid">
@@ -15661,10 +15713,10 @@ export default function App() {
                                 </span>
                                 <span className="appearance-scene-title">
                                   <strong>{scene.label}</strong>
-                                  <small>{scene.theme === 'light' ? 'Light' : 'Dark'}</small>
+                                  <small>{scene.theme === 'light' ? uiText('Светлая', 'Light') : uiText('Тёмная', 'Dark')}</small>
                                 </span>
                                 <small className="appearance-scene-hint">{scene.hint}</small>
-                                <span className="appearance-scene-meta">{scenePrefs.style} / {scenePrefs.density}</span>
+                                <span className="appearance-scene-meta">{getUiStyleLabel(scenePrefs.style)} / {getUiDensityLabel(scenePrefs.density)}</span>
                               </button>
                             )
                           })}
@@ -15674,7 +15726,7 @@ export default function App() {
                       <div className="appearance-accent-grid">
                         <label>
                           <span className="appearance-color-label">
-                            Primary accent
+                            {uiText('Основной акцент', 'Primary accent')}
                             <small className="appearance-color-value">{formatHexColorLabel(appearanceEditableColors.accent, DEFAULT_UI_PREFERENCES.accentColor)}</small>
                           </span>
                           <input
@@ -15685,7 +15737,7 @@ export default function App() {
                         </label>
                         <label>
                           <span className="appearance-color-label">
-                            Secondary accent
+                            {uiText('Второй акцент', 'Secondary accent')}
                             <small className="appearance-color-value">{formatHexColorLabel(appearanceEditableColors.accent2, DEFAULT_UI_PREFERENCES.accent2Color)}</small>
                           </span>
                           <input
@@ -15696,7 +15748,7 @@ export default function App() {
                         </label>
                         <label>
                           <span className="appearance-color-label">
-                            Outline color
+                            {uiText('Цвет контура', 'Outline color')}
                             <small className="appearance-color-value">{formatHexColorLabel(appearanceEditableColors.outline, DEFAULT_UI_PREFERENCES.outlineColor)}</small>
                           </span>
                           <input
@@ -15707,7 +15759,7 @@ export default function App() {
                         </label>
                         <label>
                           <span className="appearance-color-label">
-                            Stripe lines
+                            {uiText('Полосы', 'Stripe lines')}
                             <small className="appearance-color-value">{formatHexColorLabel(appearanceEditableColors.stripe, DEFAULT_UI_PREFERENCES.stripeColor)}</small>
                           </span>
                           <input
@@ -15718,7 +15770,7 @@ export default function App() {
                         </label>
                         <label>
                           <span className="appearance-color-label">
-                            Chat frame
+                            {uiText('Рамка чата', 'Chat frame')}
                             <small className="appearance-color-value">{formatHexColorLabel(appearanceEditableColors.chat, DEFAULT_UI_PREFERENCES.chatAccentColor)}</small>
                           </span>
                           <input
@@ -15729,7 +15781,7 @@ export default function App() {
                         </label>
                         <label>
                           <span className="appearance-color-label">
-                            Feed frame
+                            {uiText('Рамка ленты', 'Feed frame')}
                             <small className="appearance-color-value">{formatHexColorLabel(appearanceEditableColors.feed, DEFAULT_UI_PREFERENCES.feedAccentColor)}</small>
                           </span>
                           <input
@@ -15743,7 +15795,7 @@ export default function App() {
                       <div className="appearance-accent-grid">
                         <label>
                           <span className="appearance-color-label">
-                            Background
+                            {uiText('Фон', 'Background')}
                             <small className="appearance-color-value">{formatHexColorLabel(appearanceEditableColors.bg, DEFAULT_UI_PREFERENCES.bgColor)}</small>
                           </span>
                           <input
@@ -15754,7 +15806,7 @@ export default function App() {
                         </label>
                         <label>
                           <span className="appearance-color-label">
-                            Panel
+                            {uiText('Панель', 'Panel')}
                             <small className="appearance-color-value">{formatHexColorLabel(appearanceEditableColors.panel, DEFAULT_UI_PREFERENCES.panelColor)}</small>
                           </span>
                           <input
@@ -15765,7 +15817,7 @@ export default function App() {
                         </label>
                         <label>
                           <span className="appearance-color-label">
-                            Panel 2
+                            {uiText('Панель 2', 'Panel 2')}
                             <small className="appearance-color-value">{formatHexColorLabel(appearanceEditableColors.panel2, DEFAULT_UI_PREFERENCES.panel2Color)}</small>
                           </span>
                           <input
@@ -15776,7 +15828,7 @@ export default function App() {
                         </label>
                         <label>
                           <span className="appearance-color-label">
-                            Card
+                            {uiText('Карточка', 'Card')}
                             <small className="appearance-color-value">{formatHexColorLabel(appearanceEditableColors.card, DEFAULT_UI_PREFERENCES.cardColor)}</small>
                           </span>
                           <input
@@ -15787,7 +15839,7 @@ export default function App() {
                         </label>
                         <label>
                           <span className="appearance-color-label">
-                            Text
+                            {uiText('Текст', 'Text')}
                             <small className="appearance-color-value">{formatHexColorLabel(appearanceEditableColors.text, DEFAULT_UI_PREFERENCES.textColor)}</small>
                           </span>
                           <input
@@ -15798,7 +15850,7 @@ export default function App() {
                         </label>
                         <label>
                           <span className="appearance-color-label">
-                            Muted text
+                            {uiText('Приглушённый текст', 'Muted text')}
                             <small className="appearance-color-value">{formatHexColorLabel(appearanceEditableColors.muted, DEFAULT_UI_PREFERENCES.mutedColor)}</small>
                           </span>
                           <input
@@ -15811,24 +15863,24 @@ export default function App() {
 
                       <p className="appearance-accent-hint">
                         {uiPreferences.syncAccent
-                          ? 'Accent currently follows your profile color. Disable sync to choose custom colors.'
-                          : 'Custom accents are active. Pick a preset below or fine tune manually.'}
+                          ? uiText('Акцент сейчас повторяет цвет профиля. Отключи синхронизацию, чтобы выбрать свои цвета.', 'Accent currently follows your profile color. Disable sync to choose custom colors.')
+                          : uiText('Пользовательские акценты активны. Выбери пресет ниже или настрой всё вручную.', 'Custom accents are active. Pick a preset below or fine tune manually.')}
                         {' '}
                         {uiPreferences.outlineMode === 'custom'
-                          ? 'Outline color is custom and affects borders in chat, feed and panels.'
-                          : 'Outline color is in auto mode. Changing outline picker switches it to manual.'}
+                          ? uiText('Цвет контура пользовательский и влияет на границы чатов, ленты и панелей.', 'Outline color is custom and affects borders in chat, feed and panels.')
+                          : uiText('Цвет контура в авторежиме. Изменение пикера переведёт его в ручной режим.', 'Outline color is in auto mode. Changing outline picker switches it to manual.')}
                         {' '}
-                        Stripe/chat/feed pickers apply globally to line highlights and surface frames.
+                        {uiText('Цвета полос, чата и ленты применяются глобально к акцентным линиям и рамкам поверхностей.', 'Stripe/chat/feed pickers apply globally to line highlights and surface frames.')}
                         {' '}
-                        Surface palette colors apply app-wide when custom palette is enabled.
+                        {uiText('Цвета палитры поверхностей действуют по всему приложению, когда включена своя палитра.', 'Surface palette colors apply app-wide when custom palette is enabled.')}
                         {' '}
-                        Glow color follows outline color (or accent in auto mode) and can be disabled.
+                        {uiText('Цвет свечения повторяет контур (или акцент в авторежиме) и может быть отключён.', 'Glow color follows outline color (or accent in auto mode) and can be disabled.')}
                       </p>
 
                       <section className="appearance-live-map">
                         <div className="appearance-live-map-head">
-                          <strong>What changes where</strong>
-                          <span>Live example</span>
+                          <strong>{uiText('Что меняется и где', 'What changes where')}</strong>
+                          <span>{uiText('Живой пример', 'Live example')}</span>
                         </div>
                         <div
                           className="appearance-live-canvas"
@@ -15858,14 +15910,14 @@ export default function App() {
                                   borderColor: appearanceOutlinePreview
                                 }}
                               >
-                                <strong>Card + outline</strong>
-                                <p style={{ color: appearanceEditableColors.muted }}>Muted text sample</p>
+                                <strong>{uiText('Карточка + контур', 'Card + outline')}</strong>
+                                <p style={{ color: appearanceEditableColors.muted }}>{uiText('Пример приглушённого текста', 'Muted text sample')}</p>
                                 <button
                                   type="button"
                                   className="appearance-live-primary"
                                   style={{ background: appearanceEditableColors.accent, color: '#ffffff' }}
                                 >
-                                  Primary accent
+                                  {uiText('Основной акцент', 'Primary accent')}
                                 </button>
                               </article>
                               <article
@@ -15875,26 +15927,26 @@ export default function App() {
                                   borderColor: appearanceEditableColors.chat
                                 }}
                               >
-                                <strong>Chat + feed frames</strong>
+                                <strong>{uiText('Рамки чата и ленты', 'Chat + feed frames')}</strong>
                                 <div className="appearance-live-frames">
                                   <span
                                     className="appearance-live-frame"
                                     style={{ borderColor: appearanceEditableColors.chat, color: appearanceEditableColors.text }}
                                   >
-                                    Chat frame
+                                    {uiText('Рамка чата', 'Chat frame')}
                                   </span>
                                   <span
                                     className="appearance-live-frame"
                                     style={{ borderColor: appearanceEditableColors.feed, color: appearanceEditableColors.text }}
                                   >
-                                    Feed frame
+                                    {uiText('Рамка ленты', 'Feed frame')}
                                   </span>
                                 </div>
                                 <span
                                   className="appearance-live-secondary"
                                   style={{ background: appearanceEditableColors.accent2, color: '#ffffff' }}
                                 >
-                                  Secondary accent
+                                  {uiText('Второй акцент', 'Secondary accent')}
                                 </span>
                               </article>
                             </div>
@@ -15923,7 +15975,7 @@ export default function App() {
 
                       <section className="appearance-custom-presets">
                         <div className="appearance-custom-presets-head">
-                          <strong>My presets</strong>
+                          <strong>{uiText('Мои пресеты', 'My presets')}</strong>
                           <span>{uiCustomThemePresets.length}/{UI_CUSTOM_THEME_PRESET_LIMIT}</span>
                         </div>
                         <div className="appearance-custom-presets-form">
@@ -15931,15 +15983,15 @@ export default function App() {
                             type="text"
                             value={uiCustomPresetName}
                             onChange={(event) => setUiCustomPresetName(event.target.value.slice(0, 32))}
-                            placeholder="Preset name"
+                            placeholder={uiText('Название пресета', 'Preset name')}
                             maxLength={32}
                           />
                           <button type="button" className="ghost" onClick={saveCurrentUiThemePreset}>
-                            Save current
+                            {uiText('Сохранить текущий', 'Save current')}
                           </button>
                         </div>
                         {uiCustomThemePresets.length === 0 ? (
-                          <div className="empty small">No saved presets yet.</div>
+                          <div className="empty small">{uiText('Сохранённых пресетов пока нет.', 'No saved presets yet.')}</div>
                         ) : (
                           <div className="appearance-custom-presets-list">
                             {uiCustomThemePresets.map((preset) => (
@@ -15960,12 +16012,12 @@ export default function App() {
                                   />
                                   <span className="appearance-custom-preset-text">
                                     <strong>{preset.name}</strong>
-                                    <small>{preset.preferences.style} / {preset.preferences.density}</small>
+                                    <small>{getUiStyleLabel(preset.preferences.style)} / {getUiDensityLabel(preset.preferences.density)}</small>
                                   </span>
                                 </button>
                                 <div className="appearance-custom-preset-actions">
-                                  <button type="button" onClick={() => renameUiCustomThemePreset(preset.id)}>Rename</button>
-                                  <button type="button" className="danger" onClick={() => deleteUiCustomThemePreset(preset.id)}>Delete</button>
+                                  <button type="button" onClick={() => renameUiCustomThemePreset(preset.id)}>{uiText('Переименовать', 'Rename')}</button>
+                                  <button type="button" className="danger" onClick={() => deleteUiCustomThemePreset(preset.id)}>{uiText('Удалить', 'Delete')}</button>
                                 </div>
                               </article>
                             ))}
@@ -15975,18 +16027,18 @@ export default function App() {
 
 	                      <section className="appearance-share-panel">
 	                        <div className="appearance-share-head">
-	                          <strong>Theme JSON sharing</strong>
-	                          <span>UI + профильная сцена</span>
+	                          <strong>{uiText('Обмен JSON-темой', 'Theme JSON sharing')}</strong>
+	                          <span>{uiText('UI + профильная сцена', 'UI + profile scene')}</span>
 	                        </div>
 	                        <div className="appearance-share-actions">
-	                          <button type="button" className="ghost" onClick={copyUiThemePackJson}>Copy JSON</button>
-	                          <button type="button" className="ghost" onClick={exportUiThemePackToFile}>Download JSON</button>
+	                          <button type="button" className="ghost" onClick={copyUiThemePackJson}>{uiText('Копировать JSON', 'Copy JSON')}</button>
+	                          <button type="button" className="ghost" onClick={exportUiThemePackToFile}>{uiText('Скачать JSON', 'Download JSON')}</button>
 	                          <button
 	                            type="button"
 	                            className="ghost"
 	                            onClick={() => appearanceImportInputRef.current && appearanceImportInputRef.current.click()}
 	                          >
-	                            Import file
+	                            {uiText('Импорт файла', 'Import file')}
 	                          </button>
 	                          <input
 	                            ref={appearanceImportInputRef}
@@ -15997,7 +16049,7 @@ export default function App() {
 	                          />
 	                        </div>
 	                        <label className="appearance-share-field">
-	                          <span>Paste JSON</span>
+	                          <span>{uiText('Вставить JSON', 'Paste JSON')}</span>
 	                          <textarea
 	                            rows={6}
 	                            value={appearanceImportJson}
@@ -16006,8 +16058,8 @@ export default function App() {
 	                          />
 	                        </label>
 	                        <div className="appearance-share-actions">
-	                          <button type="button" className="primary" onClick={handleAppearanceImportJsonApply}>Apply JSON</button>
-	                          <button type="button" className="ghost" onClick={() => setAppearanceImportJson('')}>Clear</button>
+	                          <button type="button" className="primary" onClick={handleAppearanceImportJsonApply}>{uiText('Применить JSON', 'Apply JSON')}</button>
+	                          <button type="button" className="ghost" onClick={() => setAppearanceImportJson('')}>{uiText('Очистить', 'Clear')}</button>
 	                        </div>
 	                      </section>
 
@@ -16018,12 +16070,12 @@ export default function App() {
                           borderColor: 'rgba(' + appearanceOutlinePreviewRgb.r + ', ' + appearanceOutlinePreviewRgb.g + ', ' + appearanceOutlinePreviewRgb.b + ', 0.42)'
                         }}
                       >
-                        <strong>Theme preview</strong>
-                        <span>{theme === 'dark' ? 'Dark' : 'Light'} / {uiPreferences.style} / {uiPreferences.density}</span>
+                        <strong>{uiText('Превью темы', 'Theme preview')}</strong>
+                        <span>{theme === 'dark' ? uiText('Тёмная', 'Dark') : uiText('Светлая', 'Light')} / {getUiStyleLabel(uiPreferences.style)} / {getUiDensityLabel(uiPreferences.density)}</span>
                       </div>
 
                       <div className="ui-studio-actions">
-                        <button type="button" className="ghost" onClick={resetUiPreferences}>Reset appearance</button>
+                        <button type="button" className="ghost" onClick={resetUiPreferences}>{uiText('Сбросить оформление', 'Reset appearance')}</button>
                       </div>
                     </section>
                   </section>
@@ -16073,19 +16125,19 @@ export default function App() {
                             inputMode="numeric"
                             value={twoFactorCode}
                             onChange={(event) => setTwoFactorCode(event.target.value.replace(/\D+/g, '').slice(0, 6))}
-                            placeholder="Current 6-digit code"
+                            placeholder="Текущий 6-значный код"
                             maxLength={6}
                           />
                           <input
                             type="text"
                             value={twoFactorBackupCode}
                             onChange={(event) => setTwoFactorBackupCode(event.target.value.trim().toUpperCase().slice(0, 20))}
-                            placeholder="Backup code (for disable)"
+                            placeholder="Резервный код для отключения"
                             maxLength={20}
                           />
                           <div className="profile-verification-actions">
-                            <button type="button" className="ghost" onClick={handleRegenerateBackupCodes} disabled={loading}>Regenerate backup codes</button>
-                            <button type="button" className="danger" onClick={handleDisableTwoFactor} disabled={loading}>Disable 2FA</button>
+                            <button type="button" className="ghost" onClick={handleRegenerateBackupCodes} disabled={loading}>Обновить резервные коды</button>
+                            <button type="button" className="danger" onClick={handleDisableTwoFactor} disabled={loading}>Отключить 2FA</button>
                           </div>
                         </div>
                       )}
@@ -16098,11 +16150,11 @@ export default function App() {
                     <p className="subtitle">Смена пароля с завершением других сессий.</p>
                     <section className="profile-verification-card">
                       <div className="profile-verification-form profile-password-form">
-                        <input type="password" value={passwordForm.currentPassword} onChange={(event) => setPasswordForm((prev) => ({ ...prev, currentPassword: event.target.value }))} placeholder="Current password" minLength={6} autoComplete="current-password" />
-                        <input type="password" value={passwordForm.newPassword} onChange={(event) => setPasswordForm((prev) => ({ ...prev, newPassword: event.target.value }))} placeholder="New password" minLength={6} autoComplete="new-password" />
-                        <input type="password" value={passwordForm.confirmPassword} onChange={(event) => setPasswordForm((prev) => ({ ...prev, confirmPassword: event.target.value }))} placeholder="Confirm new password" minLength={6} autoComplete="new-password" />
+                        <input type="password" value={passwordForm.currentPassword} onChange={(event) => setPasswordForm((prev) => ({ ...prev, currentPassword: event.target.value }))} placeholder="Текущий пароль" minLength={6} autoComplete="current-password" />
+                        <input type="password" value={passwordForm.newPassword} onChange={(event) => setPasswordForm((prev) => ({ ...prev, newPassword: event.target.value }))} placeholder="Новый пароль" minLength={6} autoComplete="new-password" />
+                        <input type="password" value={passwordForm.confirmPassword} onChange={(event) => setPasswordForm((prev) => ({ ...prev, confirmPassword: event.target.value }))} placeholder="Подтвердите новый пароль" minLength={6} autoComplete="new-password" />
                         <div className="profile-verification-actions">
-                          <button type="button" className="primary" onClick={handleChangePassword} disabled={loading}>Change password</button>
+                          <button type="button" className="primary" onClick={handleChangePassword} disabled={loading}>Сменить пароль</button>
                         </div>
                       </div>
                     </section>
@@ -16114,32 +16166,32 @@ export default function App() {
                     <p className="subtitle">Список входов и завершение любой сессии.</p>
                     <section className="profile-verification-card">
                       <div className="profile-verification-head">
-                        <h3>Sessions</h3>
+                        <h3>Сеансы</h3>
                         <span className="verification-status-badge none">{settingsActiveSessionCount}</span>
                       </div>
                       <div className="profile-verification-actions">
-                        <button type="button" className="ghost" onClick={() => loadUserSessions()} disabled={sessionsLoading}>Refresh</button>
-                        <button type="button" className="danger" onClick={handleRevokeOtherSessions} disabled={sessionsLoading}>Revoke other sessions</button>
+                        <button type="button" className="ghost" onClick={() => loadUserSessions()} disabled={sessionsLoading}>Обновить</button>
+                        <button type="button" className="danger" onClick={handleRevokeOtherSessions} disabled={sessionsLoading}>Завершить остальные сеансы</button>
                       </div>
                       {sessionsLoading ? (
-                        <div className="empty small">Loading sessions...</div>
+                        <div className="empty small">Загрузка сеансов...</div>
                       ) : sessions.length === 0 ? (
-                        <div className="empty small">No active sessions.</div>
+                        <div className="empty small">Активных сеансов нет.</div>
                       ) : (
                         <div className="admin-list">
                           {sessions.map((sessionItem) => (
                             <div key={sessionItem.id} className="admin-item">
                               <div>
-                                <strong>{sessionItem.isCurrent ? 'Current device' : 'Device session'}</strong>
-                                <span>{sessionItem.userAgent || 'Unknown user agent'}</span>
+                                <strong>{sessionItem.isCurrent ? 'Текущее устройство' : 'Сеанс устройства'}</strong>
+                                <span>{sessionItem.userAgent || 'Неизвестный user agent'}</span>
                                 <div className="admin-meta">
                                   <span>IP: {sessionItem.ipAddress || 'n/a'}</span>
-                                  <span>Last: {formatDateTime(sessionItem.lastSeenAt || sessionItem.createdAt) || 'n/a'}</span>
+                                  <span>Последняя активность: {formatDateTime(sessionItem.lastSeenAt || sessionItem.createdAt) || 'n/a'}</span>
                                 </div>
                               </div>
                               {!sessionItem.isCurrent && !sessionItem.revokedAt && (
                                 <div className="admin-actions">
-                                  <button type="button" className="danger" onClick={() => handleRevokeSession(sessionItem.id)}>Revoke</button>
+                                  <button type="button" className="danger" onClick={() => handleRevokeSession(sessionItem.id)}>Отозвать</button>
                                 </div>
                               )}
                             </div>
@@ -16152,15 +16204,15 @@ export default function App() {
                 {settingsSection === 'privacy' && (
                   <section className="settings-pane">
                     <h2>Конфиденциальность</h2>
-                    <p className="subtitle">Mute, block, hide profile content и запрет лички.</p>
+                    <p className="subtitle">Мут, блокировка, скрытие профиля и запрет личных сообщений.</p>
                     <section className="profile-verification-card">
                       <div className="profile-verification-head">
-                        <h3>Quick rule by @username</h3>
+                        <h3>Быстрое правило по @username</h3>
                         <span className={`verification-status-badge ${privacyQuickLoading ? 'pending' : 'none'}`.trim()}>
-                          {privacyQuickLoading ? 'Updating...' : 'Manual'}
+                          {privacyQuickLoading ? 'Обновление...' : 'Вручную'}
                         </span>
                       </div>
-                      <p className="profile-verification-text">Find a user and apply privacy flags in one click.</p>
+                      <p className="profile-verification-text">Найди пользователя и примени флаги приватности в один клик.</p>
                       <div className="profile-verification-form">
                         <input
                           type="text"
@@ -16171,7 +16223,7 @@ export default function App() {
                           autoComplete="off"
                         />
                         {privacyQuickSearchLoading ? (
-                          <div className="empty small">Searching users...</div>
+                          <div className="empty small">Ищем пользователей...</div>
                         ) : privacyQuickUsers.length > 0 ? (
                           <div className="privacy-quick-user-list">
                             {privacyQuickUsers.map((item) => (
@@ -16193,106 +16245,106 @@ export default function App() {
                             className={privacyQuickFlags.isMuted ? 'active' : ''}
                             onClick={() => togglePrivacyQuickFlag('isMuted')}
                           >
-                            Mute
+                            Мут
                           </button>
                           <button
                             type="button"
                             className={privacyQuickFlags.denyDm ? 'active' : ''}
                             onClick={() => togglePrivacyQuickFlag('denyDm')}
                           >
-                            Deny DM
+                            Запрет DM
                           </button>
                           <button
                             type="button"
-                            className={privacyQuickFlags.hideProfileContent ? 'active' : ''}
+                            className={privacyQuickFlags.hideProfileContent ? 'active' : ''} 
                             onClick={() => togglePrivacyQuickFlag('hideProfileContent')}
                           >
-                            Hide profile
+                            Скрыть профиль
                           </button>
                           <button
                             type="button"
                             className={privacyQuickFlags.isBlocked ? 'active danger' : 'danger'}
                             onClick={() => togglePrivacyQuickFlag('isBlocked')}
                           >
-                            Block
+                            Блок
                           </button>
                         </div>
                         <div className="profile-verification-actions">
                           <button type="button" className="primary" onClick={applyPrivacyQuickRule} disabled={privacyQuickLoading}>
-                            Apply rule
+                            Применить правило
                           </button>
                         </div>
                       </div>
                     </section>
                     <section className="profile-verification-card">
                       <div className="profile-verification-head">
-                        <h3>Batch actions</h3>
+                        <h3>Пакетные действия</h3>
                         <span className="verification-status-badge none">{privacyControls.length}</span>
                       </div>
-                      <p className="profile-verification-text">Apply preset actions to all users from your privacy list.</p>
+                      <p className="profile-verification-text">Примени готовые действия ко всем пользователям из списка приватности.</p>
                       <div className="privacy-batch-actions">
                         <button type="button" onClick={() => applyPrivacyBatchPreset('shield-all')} disabled={privacyQuickLoading || privacyControlsLoading}>
-                          Shield all (deny DM + hide profile)
+                          Защитить всех (запрет DM + скрыть профиль)
                         </button>
                         <button type="button" onClick={() => applyPrivacyBatchPreset('mute-all')} disabled={privacyQuickLoading || privacyControlsLoading}>
-                          Mute all
+                          Замутить всех
                         </button>
                         <button type="button" className="danger" onClick={() => applyPrivacyBatchPreset('clear-all')} disabled={privacyQuickLoading || privacyControlsLoading}>
-                          Clear all rules
+                          Очистить все правила
                         </button>
                       </div>
                     </section>
                     <section className="profile-verification-card">
                       <div className="profile-verification-head">
-                        <h3>Privacy Controls</h3>
+                        <h3>Контроль приватности</h3>
                         <span className="verification-status-badge none">{privacyControls.length}</span>
                       </div>
                       <div className="profile-verification-actions">
-                        <button type="button" className="ghost" onClick={() => loadMyPrivacy()} disabled={privacyControlsLoading}>Refresh</button>
+                        <button type="button" className="ghost" onClick={() => loadMyPrivacy()} disabled={privacyControlsLoading}>Обновить</button>
                       </div>
                       {privacyControlsLoading ? (
-                        <div className="empty small">Loading privacy controls...</div>
+                        <div className="empty small">Загрузка настроек приватности...</div>
                       ) : privacyControls.length === 0 ? (
-                        <div className="empty small">No custom privacy rules.</div>
+                        <div className="empty small">Пользовательских правил приватности нет.</div>
                       ) : (
                         <div className="admin-list">
                           {privacyControls.map((item) => (
                             <div key={`settings-privacy-${item.targetUserId}`} className="admin-item">
                               <div>
-                                <strong>{item.targetDisplayName || item.targetUsername || 'User'}</strong>
+                                <strong>{item.targetDisplayName || item.targetUsername || 'Пользователь'}</strong>
                                 <span>@{item.targetUsername || 'unknown'}</span>
                                 <div className="admin-badges">
-                                  {item.isMuted && <span className="badge role">MUTE</span>}
-                                  {item.isBlocked && <span className="badge role">BLOCK</span>}
-                                  {item.hideProfileContent && <span className="badge role">HIDE PROFILE</span>}
-                                  {item.denyDm && <span className="badge role">DENY DM</span>}
+                                  {item.isMuted && <span className="badge role">МУТ</span>}
+                                  {item.isBlocked && <span className="badge role">БЛОК</span>}
+                                  {item.hideProfileContent && <span className="badge role">СКРЫТ ПРОФИЛЬ</span>}
+                                  {item.denyDm && <span className="badge role">ЗАПРЕТ DM</span>}
                                 </div>
                               </div>
                               <div className="admin-actions">
                                 <button
                                   type="button"
-                                  onClick={() => applyPrivacyPatchForUser(item.targetUsername, { isMuted: !item.isMuted }, item.isMuted ? 'Mute removed.' : 'User muted.')}
+                                  onClick={() => applyPrivacyPatchForUser(item.targetUsername, { isMuted: !item.isMuted }, item.isMuted ? 'Мут снят.' : 'Пользователь замучен.')}
                                 >
-                                  {item.isMuted ? 'Unmute' : 'Mute'}
+                                  {item.isMuted ? 'Снять мут' : 'Мут'}
                                 </button>
                                 <button
                                   type="button"
-                                  onClick={() => applyPrivacyPatchForUser(item.targetUsername, { denyDm: !item.denyDm }, item.denyDm ? 'DM allowed.' : 'DM denied.')}
+                                  onClick={() => applyPrivacyPatchForUser(item.targetUsername, { denyDm: !item.denyDm }, item.denyDm ? 'DM разрешены.' : 'DM запрещены.')}
                                 >
-                                  {item.denyDm ? 'Allow DM' : 'Deny DM'}
+                                  {item.denyDm ? 'Разрешить DM' : 'Запретить DM'}
                                 </button>
                                 <button
                                   type="button"
-                                  onClick={() => applyPrivacyPatchForUser(item.targetUsername, { hideProfileContent: !item.hideProfileContent }, item.hideProfileContent ? 'Profile content visible.' : 'Profile content hidden.')}
+                                  onClick={() => applyPrivacyPatchForUser(item.targetUsername, { hideProfileContent: !item.hideProfileContent }, item.hideProfileContent ? 'Профиль снова виден.' : 'Профиль скрыт.')}
                                 >
-                                  {item.hideProfileContent ? 'Show profile' : 'Hide profile'}
+                                  {item.hideProfileContent ? 'Показать профиль' : 'Скрыть профиль'}
                                 </button>
                                 <button
                                   type="button"
                                   className="danger"
-                                  onClick={() => applyPrivacyPatchForUser(item.targetUsername, { isBlocked: !item.isBlocked }, item.isBlocked ? 'User unblocked.' : 'User blocked.')}
+                                  onClick={() => applyPrivacyPatchForUser(item.targetUsername, { isBlocked: !item.isBlocked }, item.isBlocked ? 'Пользователь разблокирован.' : 'Пользователь заблокирован.')}
                                 >
-                                  {item.isBlocked ? 'Unblock' : 'Block'}
+                                  {item.isBlocked ? 'Разблокировать' : 'Блок'}
                                 </button>
                                 <button
                                   type="button"
@@ -16352,8 +16404,33 @@ export default function App() {
                 )}
                 {settingsSection === 'language' && (
                   <section className="settings-pane">
-                    <h2>Язык</h2>
-                    <p className="subtitle">Сейчас интерфейс на русском языке.</p>
+                    <h2>{uiText('Язык', 'Language')}</h2>
+                    <p className="subtitle">{uiText('Выбор языка сохраняется в браузере и применяется сразу.', 'Language choice is saved in the browser and applied immediately.')}</p>
+                    <div className="settings-action-list">
+                      <button
+                        type="button"
+                        className={`settings-action-row ${appLanguage === 'ru' ? 'active' : ''}`.trim()}
+                        onClick={() => setAppLanguage('ru')}
+                        aria-pressed={appLanguage === 'ru'}
+                      >
+                        <strong>Русский</strong>
+                        <span>Основной язык интерфейса и полный перевод новых панелей.</span>
+                      </button>
+                      <button
+                        type="button"
+                        className={`settings-action-row ${appLanguage === 'en' ? 'active' : ''}`.trim()}
+                        onClick={() => setAppLanguage('en')}
+                        aria-pressed={appLanguage === 'en'}
+                      >
+                        <strong>English (beta)</strong>
+                        <span>Сначала переключает обновлённые панели, старые разделы ещё выравниваются.</span>
+                      </button>
+                    </div>
+                    <p className="settings-language-note">
+                      {appLanguage === 'ru'
+                        ? 'Русский включён. Новые разделы Pulse, рабочая панель и оформление уже полностью русифицированы.'
+                        : 'English beta is enabled. The newest workspace panels switch first while legacy areas are still being aligned.'}
+                    </p>
                   </section>
                 )}
                 {settingsSection === 'support' && (
@@ -16593,9 +16670,9 @@ export default function App() {
             </label>
             <section className="profile-verification-card">
               <div className="profile-verification-head">
-                <h3>Verification</h3>
+                <h3>Верификация</h3>
                 <span className={`verification-status-badge ${user.isVerified ? 'approved' : (verificationRequestStatus || 'none')}`.trim()}>
-                  {user.isVerified ? 'Verified' : verificationRequestStatusLabel}
+                  {user.isVerified ? 'Проверен' : verificationRequestStatusLabel}
                 </span>
               </div>
               {user.isVerified ? (
@@ -16613,7 +16690,7 @@ export default function App() {
                     </div>
                   ) : null}
                   {verificationRequest && verificationRequest.status === 'pending' ? (
-                    <p className="profile-verification-text">Request is under review. You can cancel and submit a new one.</p>
+                    <p className="profile-verification-text">Заявка на проверке. Её можно отменить и отправить новую.</p>
                   ) : null}
                   {verificationRequest && verificationRequest.status === 'rejected' ? (
                     <p className="profile-verification-text">
@@ -16622,7 +16699,7 @@ export default function App() {
                     </p>
                   ) : null}
                   {verificationRequest && verificationRequest.status === 'cancelled' ? (
-                    <p className="profile-verification-text">Previous request was cancelled. You can submit a new one.</p>
+                    <p className="profile-verification-text">Предыдущая заявка была отменена. Можно отправить новую.</p>
                   ) : null}
                   {canCreateVerificationRequest ? (
                     <div className="profile-verification-form">
@@ -16975,7 +17052,7 @@ export default function App() {
                 </button>
               </div>
               <div className="my-tracks-list">
-                {myTracks.length === 0 && <div className="empty">No tracks uploaded yet.</div>}
+                {myTracks.length === 0 && <div className="empty">Треки ещё не загружены.</div>}
                 {myTracks.map((track) => (
                   <div key={track.id} className="my-track-item">
                     <div>
@@ -17097,13 +17174,13 @@ export default function App() {
               </button>
             )}
             <button type="button" onClick={toggleChatMute}>
-              {activeConversationPrivacy.isMuted ? 'Unmute chat' : 'Mute chat'}
+              {activeConversationPrivacy.isMuted ? 'Снять мут с чата' : 'Замутить чат'}
             </button>
             <button type="button" onClick={toggleChatDenyDm}>
-              {activeConversationPrivacy.denyDm ? 'Allow DM' : 'Deny DM'}
+              {activeConversationPrivacy.denyDm ? 'Разрешить DM' : 'Запретить DM'}
             </button>
             <button type="button" onClick={toggleChatHideProfile}>
-              {activeConversationPrivacy.hideProfileContent ? 'Show profile content' : 'Hide profile content'}
+              {activeConversationPrivacy.hideProfileContent ? 'Показать профиль' : 'Скрыть профиль'}
             </button>
             <button type="button" className="danger" onClick={toggleChatBlock}>
               {activeConversationPrivacy.isBlocked ? 'Разблокировать' : 'Заблокировать'}
@@ -17133,7 +17210,7 @@ export default function App() {
                     {miniProfileCard.user.displayName || miniProfileCard.user.username || 'Пользователь'}
                   </span>
                   {miniProfileCard.user.isVerified && <span className="verified-mark mini-profile-verified" title="Верифицированный профиль">✓</span>}
-                  {miniProfileCard.user.showRole !== false && miniProfileCard.user.isOwner && <span className="owner-mark mini-profile-owner" title="Owner">*</span>}
+                  {miniProfileCard.user.showRole !== false && miniProfileCard.user.isOwner && <span className="owner-mark mini-profile-owner" title="Владелец">*</span>}
                 </strong>
                 {miniProfileCard.user.username && <span>@{miniProfileCard.user.username}</span>}
               </div>
@@ -17177,7 +17254,7 @@ export default function App() {
                   className="ghost mini-profile-wave"
                   onClick={handleMiniProfileWave}
                   disabled={miniProfileDmBlocked}
-                  title={miniProfileDmBlocked ? 'Direct messages are blocked by privacy settings' : 'Send wave'}
+                  title={miniProfileDmBlocked ? 'Личные сообщения заблокированы настройками приватности' : 'Отправить волну'}
                 >
                   Вейв
                 </button>
@@ -17193,9 +17270,9 @@ export default function App() {
                   className="primary"
                   onClick={handleMiniProfileMessage}
                   disabled={miniProfileDmBlocked}
-                  title={miniProfileDmBlocked ? 'Direct messages are blocked by privacy settings' : 'Open chat'}
+                  title={miniProfileDmBlocked ? 'Личные сообщения заблокированы настройками приватности' : 'Открыть чат'}
                 >
-                  Message
+                  Написать
                 </button>
               )}
             </div>
