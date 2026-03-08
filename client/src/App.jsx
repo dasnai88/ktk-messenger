@@ -94,11 +94,6 @@ const icons = {
       <path d="M4 4h7v7H4V4Zm9 0h7v4h-7V4ZM4 13h4v7H4v-7Zm6 0h10v7H10v-7Zm5-4h5v2h-5V9Zm-4 0h2v2h-2V9Z" />
     </svg>
   ),
-  pulse: (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M3 12h4l2.2-5.2a1 1 0 0 1 1.86.08L13.4 15l2.08-3.47a1 1 0 0 1 .86-.49H21v2h-4.1l-2.9 4.84a1 1 0 0 1-1.83-.19l-2.1-7.36-1.16 2.76A1 1 0 0 1 8 14H3v-2Z" />
-    </svg>
-  ),
   feed: (
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path d="M5 4h14a2 2 0 0 1 2 2v2H3V6a2 2 0 0 1 2-2Zm-2 8h18v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-6Zm4 2h6v2H7v-2Z" />
@@ -434,7 +429,6 @@ const DASHBOARD_COMMAND_HISTORY_STORAGE_KEY = 'ktk_dashboard_command_history_v1'
 const DASHBOARD_SCRATCHPAD_STORAGE_KEY = 'ktk_dashboard_scratchpad_v1'
 const FEED_COMPOSER_DRAFT_STORAGE_KEY = 'ktk_feed_composer_draft_v1'
 const PULSE_DISMISSED_STORAGE_KEY = 'ktk_pulse_dismissed_v1'
-const PULSE_PINNED_STORAGE_KEY = 'ktk_pulse_pinned_v1'
 const APP_LANGUAGE_STORAGE_KEY = 'ktk_app_language_v1'
 const CHAT_WALLPAPER_STORAGE_KEY = 'ktk_chat_wallpapers'
 const CHAT_ALIAS_STORAGE_KEY = 'ktk_chat_aliases'
@@ -459,36 +453,22 @@ const DASHBOARD_WORKBENCH_MODE_OPTIONS = [
 ]
 
 const PULSE_TABS = {
-  all: 'all',
   priority: 'priority',
   chats: 'chats',
   feed: 'feed',
   profile: 'profile',
   system: 'system',
-  pinned: 'pinned',
   archived: 'archived'
 }
 
 const PULSE_TAB_OPTIONS = [
-  { value: PULSE_TABS.all, label: 'All', labelRu: 'Все', hint: 'full queue', hintRu: 'вся очередь' },
   { value: PULSE_TABS.priority, label: 'Priority', labelRu: 'Приоритет', hint: 'top actions', hintRu: 'главные действия' },
   { value: PULSE_TABS.chats, label: 'Chats', labelRu: 'Чаты', hint: 'replies + drafts', hintRu: 'ответы + черновики' },
   { value: PULSE_TABS.feed, label: 'Feed', labelRu: 'Лента', hint: 'trends + mentions', hintRu: 'тренды + упоминания' },
   { value: PULSE_TABS.profile, label: 'Profile', labelRu: 'Профиль', hint: 'growth tasks', hintRu: 'рост и задачи' },
   { value: PULSE_TABS.system, label: 'System', labelRu: 'Система', hint: 'health + alerts', hintRu: 'здоровье + сигналы' },
-  { value: PULSE_TABS.pinned, label: 'Pinned', labelRu: 'Закреплённое', hint: 'saved focus', hintRu: 'сохранённый фокус' },
   { value: PULSE_TABS.archived, label: 'Done', labelRu: 'Готово', hint: 'resolved items', hintRu: 'закрытые пункты' }
 ]
-const DASHBOARD_PULSE_TAB_OPTIONS = PULSE_TAB_OPTIONS.filter((item) => (
-  [
-    PULSE_TABS.priority,
-    PULSE_TABS.chats,
-    PULSE_TABS.feed,
-    PULSE_TABS.profile,
-    PULSE_TABS.system,
-    PULSE_TABS.archived
-  ].includes(item.value)
-))
 const PULSE_LANE_LABELS = {
   [PULSE_TABS.chats]: 'Чаты',
   [PULSE_TABS.feed]: 'Лента',
@@ -506,7 +486,7 @@ function normalizeDashboardWorkbenchMode(value) {
 
 function normalizePulseTab(value) {
   const normalized = String(value || '').trim().toLowerCase()
-  return Object.values(PULSE_TABS).includes(normalized) ? normalized : PULSE_TABS.all
+  return Object.values(PULSE_TABS).includes(normalized) ? normalized : PULSE_TABS.priority
 }
 
 function normalizeAppLanguage(value) {
@@ -2023,7 +2003,6 @@ export default function App() {
   const getWorkbenchModeLabel = (item) => (isEnglishUi ? item.label : item.labelRu || item.label)
   const getWorkbenchModeHint = (item) => (isEnglishUi ? item.hint : item.hintRu || item.hint)
   const getPulseTabLabel = (item) => (isEnglishUi ? item.label : item.labelRu || item.label)
-  const getPulseTabHint = (item) => (isEnglishUi ? item.hint : item.hintRu || item.hint)
 
   const [conversations, setConversations] = useState([])
   const [activeConversation, setActiveConversation] = useState(null)
@@ -2162,24 +2141,12 @@ export default function App() {
   })
   const [dashboardLastRefreshAt, setDashboardLastRefreshAt] = useState(null)
   const [pulseTab, setPulseTab] = useState(PULSE_TABS.priority)
-  const [pulseQuery, setPulseQuery] = useState('')
   const [pulseDismissedItemIds, setPulseDismissedItemIds] = useState(() => {
     if (typeof window === 'undefined') return []
     try {
       const parsed = JSON.parse(localStorage.getItem(PULSE_DISMISSED_STORAGE_KEY) || '[]')
       return Array.isArray(parsed)
         ? parsed.map((item) => String(item || '').trim()).filter(Boolean).slice(0, 200)
-        : []
-    } catch (err) {
-      return []
-    }
-  })
-  const [pulsePinnedItemIds, setPulsePinnedItemIds] = useState(() => {
-    if (typeof window === 'undefined') return []
-    try {
-      const parsed = JSON.parse(localStorage.getItem(PULSE_PINNED_STORAGE_KEY) || '[]')
-      return Array.isArray(parsed)
-        ? parsed.map((item) => String(item || '').trim()).filter(Boolean).slice(0, 80)
         : []
     } catch (err) {
       return []
@@ -3854,9 +3821,6 @@ export default function App() {
   const pulseDismissedIdSet = useMemo(() => (
     new Set(pulseDismissedItemIds.map((item) => String(item || '').trim()).filter(Boolean))
   ), [pulseDismissedItemIds])
-  const pulsePinnedIdSet = useMemo(() => (
-    new Set(pulsePinnedItemIds.map((item) => String(item || '').trim()).filter(Boolean))
-  ), [pulsePinnedItemIds])
   const pulseMentionPosts = useMemo(() => {
     if (!user || !user.username) return []
     const targetMention = `@${String(user.username || '').trim().toLowerCase()}`
@@ -4132,55 +4096,30 @@ export default function App() {
     pulseRawItems.filter((item) => pulseDismissedIdSet.has(item.id))
   ), [pulseRawItems, pulseDismissedIdSet])
   const pulseTabCounts = useMemo(() => ({
-    [PULSE_TABS.all]: pulseActiveItems.length,
     [PULSE_TABS.priority]: pulseActiveItems.filter((item) => item.priority >= PULSE_PRIORITY_THRESHOLD).length,
     [PULSE_TABS.chats]: pulseActiveItems.filter((item) => item.lane === PULSE_TABS.chats).length,
     [PULSE_TABS.feed]: pulseActiveItems.filter((item) => item.lane === PULSE_TABS.feed).length,
     [PULSE_TABS.profile]: pulseActiveItems.filter((item) => item.lane === PULSE_TABS.profile).length,
     [PULSE_TABS.system]: pulseActiveItems.filter((item) => item.lane === PULSE_TABS.system).length,
-    [PULSE_TABS.pinned]: pulseActiveItems.filter((item) => pulsePinnedIdSet.has(item.id)).length,
     [PULSE_TABS.archived]: pulseArchivedItems.length
-  }), [pulseActiveItems, pulseArchivedItems.length, pulsePinnedIdSet])
-  const pulseQueryNormalized = String(pulseQuery || '').trim().toLowerCase()
+  }), [pulseActiveItems, pulseArchivedItems.length])
   const pulseVisibleItems = useMemo(() => {
     const source = pulseTab === PULSE_TABS.archived ? pulseArchivedItems : pulseActiveItems
     let nextItems = source
     if (pulseTab === PULSE_TABS.priority) {
       nextItems = source.filter((item) => item.priority >= PULSE_PRIORITY_THRESHOLD)
-    } else if (pulseTab === PULSE_TABS.pinned) {
-      nextItems = source.filter((item) => pulsePinnedIdSet.has(item.id))
-    } else if (pulseTab !== PULSE_TABS.all && pulseTab !== PULSE_TABS.archived) {
+    } else if (pulseTab !== PULSE_TABS.archived) {
       nextItems = source.filter((item) => item.lane === pulseTab)
     }
-    if (pulseQueryNormalized) {
-      nextItems = nextItems.filter((item) => (
-        `${item.title} ${item.text} ${item.meta || ''} ${item.lane} ${(item.badges || []).join(' ')}`
-          .toLowerCase()
-          .includes(pulseQueryNormalized)
-      ))
-    }
     return [...nextItems].sort((a, b) => {
-      const pinDiff = Number(pulsePinnedIdSet.has(b.id)) - Number(pulsePinnedIdSet.has(a.id))
-      if (pinDiff !== 0 && pulseTab !== PULSE_TABS.archived) return pinDiff
       if (b.priority !== a.priority) return b.priority - a.priority
       return (Date.parse(b.timestamp || '') || 0) - (Date.parse(a.timestamp || '') || 0)
     })
-  }, [pulseTab, pulseArchivedItems, pulseActiveItems, pulsePinnedIdSet, pulseQueryNormalized])
-  const pulsePriorityItems = useMemo(() => (
-    pulseActiveItems.filter((item) => item.priority >= PULSE_PRIORITY_THRESHOLD).slice(0, 3)
-  ), [pulseActiveItems])
-  const pulsePinnedPreviewItems = useMemo(() => (
-    pulseActiveItems.filter((item) => pulsePinnedIdSet.has(item.id)).slice(0, 4)
-  ), [pulseActiveItems, pulsePinnedIdSet])
+  }, [pulseTab, pulseArchivedItems, pulseActiveItems])
   const pulsePriorityCount = pulseTabCounts[PULSE_TABS.priority] || 0
-  const pulseWorkspaceHealth = pulsePriorityCount > 0
-    ? 'Attention'
-    : pulseActiveItems.length > 0
-      ? 'Stable'
-      : 'Clear'
   const pulseResolvedCount = pulseTabCounts[PULSE_TABS.archived] || 0
   const dashboardPulseVisibleItems = useMemo(() => (
-    pulseVisibleItems.slice(0, pulseTab === PULSE_TABS.archived ? 5 : 4)
+    pulseVisibleItems.slice(0, pulseTab === PULSE_TABS.archived ? 4 : 3)
   ), [pulseTab, pulseVisibleItems])
   const dashboardPulseHealthLabel = useMemo(() => {
     if (pulsePriorityCount > 0) return uiText('Требует внимания', 'Needs attention')
@@ -5635,17 +5574,6 @@ export default function App() {
       // ignore storage errors
     }
   }, [pulseDismissedItemIds])
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(
-        PULSE_PINNED_STORAGE_KEY,
-        JSON.stringify(pulsePinnedItemIds.slice(0, 80))
-      )
-    } catch (err) {
-      // ignore storage errors
-    }
-  }, [pulsePinnedItemIds])
 
   useEffect(() => {
     try {
@@ -8356,7 +8284,6 @@ export default function App() {
 
   const openPulseWorkspace = (tab = PULSE_TABS.priority) => {
     setView('dashboard')
-    setPulseQuery('')
     setPulseTab(normalizePulseTab(tab))
   }
 
@@ -8866,17 +8793,6 @@ export default function App() {
   const openSettingsSectionView = (section = 'general') => {
     setSettingsSection(section)
     setView('settings')
-  }
-
-  const togglePulsePin = (itemId) => {
-    const key = String(itemId || '').trim()
-    if (!key) return
-    setPulsePinnedItemIds((prev) => {
-      if (prev.includes(key)) {
-        return prev.filter((item) => item !== key)
-      }
-      return [key, ...prev.filter((item) => item !== key)].slice(0, 80)
-    })
   }
 
   const dismissPulseItem = (itemId) => {
@@ -11207,18 +11123,6 @@ export default function App() {
             {user ? (
               <button
                 type="button"
-                style={{ display: 'none' }}
-                className={`pulse-toggle ${view === 'pulse' ? 'active' : ''}`.trim()}
-                onClick={() => openPulseWorkspace()}
-                title={uiText('Рабочее пространство Pulse', 'Pulse workspace')}
-              >
-                <span>{pulsePriorityCount > 99 ? '99+' : pulsePriorityCount}</span>
-                {uiText('Пульс', 'Pulse')}
-              </button>
-            ) : null}
-            {user ? (
-              <button
-                type="button"
                 className="command-toggle"
                 onClick={openGlobalPalette}
                 title="Командная палитра (Ctrl+K)"
@@ -11374,19 +11278,7 @@ export default function App() {
             >
               {icons.dashboard}
             </button>
-            <button
-              type="button"
-              style={{ display: 'none' }}
-              className={view === 'pulse' ? 'active' : ''}
-              onClick={() => openPulseWorkspace()}
-              title="Pulse"
-              aria-label={pulsePriorityCount > 0 ? `Pulse, priority items: ${pulsePriorityCount}` : 'Pulse'}
-            >
-              {icons.pulse}
-              {pulsePriorityCount > 0 && (
-                <span className="icon-rail-badge">{pulsePriorityCount > 99 ? '99+' : pulsePriorityCount}</span>
-              )}
-            </button>
+            
             <button
               type="button"
               className={view === 'feed' ? 'active' : ''}
@@ -11816,7 +11708,7 @@ export default function App() {
                   </article>
                 </div>
                 <div className="dashboard-inbox-filters" role="tablist" aria-label={uiText('Фильтры входящих', 'Inbox filters')}>
-                  {DASHBOARD_PULSE_TAB_OPTIONS.map((item) => (
+                  {PULSE_TAB_OPTIONS.map((item) => (
                     <button
                       key={`dashboard-inbox-tab-${item.value}`}
                       type="button"
@@ -11869,16 +11761,7 @@ export default function App() {
                     })}
                   </div>
                 )}
-                <div className="dashboard-shortcut-row">
-                  <button type="button" className="ghost" onClick={() => setPulseTab(PULSE_TABS.priority)}>
-                    {uiText('Важное', 'Priority')}
-                  </button>
-                  <button type="button" className="ghost" onClick={() => setPulseTab(PULSE_TABS.chats)}>
-                    {uiText('Чаты', 'Chats')}
-                  </button>
-                  <button type="button" className="ghost" onClick={() => setPulseTab(PULSE_TABS.feed)}>
-                    {uiText('Лента', 'Feed')}
-                  </button>
+                <div className="dashboard-inbox-actions">
                   {pulseResolvedCount > 0 && (
                     <button type="button" className="ghost" onClick={restoreAllPulseItems}>
                       {uiText('Вернуть скрытое', 'Restore hidden')}
@@ -12121,253 +12004,7 @@ export default function App() {
           </div>
         )}
 
-        {false && user && (
-          <div className="pulse-layout">
-            <section className="pulse-hero">
-              <div className="pulse-hero-main">
-                <span className="pulse-kicker">{uiText('Пространство активности', 'Activity workspace')}</span>
-                <h2>{uiText('Пульс', 'Pulse')}</h2>
-                <p>{uiText('Одна доска для непрочитанных чатов, сигналов ленты, задач профиля и системных точек внимания.', 'One board for unread chats, feed signals, profile tasks and system attention points.')}</p>
-                <div className="pulse-hero-stats">
-                  <article>
-                    <span>{uiText('Состояние', 'Health')}</span>
-                    <strong>{pulseWorkspaceHealth}</strong>
-                  </article>
-                  <article>
-                    <span>{uiText('Открытая очередь', 'Open queue')}</span>
-                    <strong>{pulseActiveItems.length}</strong>
-                  </article>
-                  <article>
-                    <span>{uiText('Приоритет', 'Priority')}</span>
-                    <strong>{pulsePriorityCount}</strong>
-                  </article>
-                  <article>
-                    <span>{uiText('Закрыто', 'Resolved')}</span>
-                    <strong>{pulseResolvedCount}</strong>
-                  </article>
-                </div>
-              </div>
-              <div className="pulse-hero-actions">
-                <label className="pulse-search">
-                  <span>{uiText('Поиск', 'Search')}</span>
-                  <input
-                    type="text"
-                    value={pulseQuery}
-                    onChange={(event) => setPulseQuery(event.target.value)}
-                    placeholder={uiText('Фильтр по заголовку, зоне или деталям', 'Filter by title, lane or detail')}
-                  />
-                </label>
-                <div className="pulse-hero-buttons">
-                  <button type="button" className="ghost" onClick={() => openPulseWorkspace(PULSE_TABS.priority)}>
-                    {uiText('Приоритет', 'Priority')}
-                  </button>
-                  <button type="button" className="ghost" onClick={() => runDashboardFocusAction('unread')}>
-                    {uiText('Непрочитанные чаты', 'Unread chats')}
-                  </button>
-                  <button type="button" className="ghost" onClick={() => runDashboardWorkbenchAction('compose')}>
-                    {uiText('Написать пост', 'Compose')}
-                  </button>
-                  <button type="button" className="primary" onClick={refreshWorkspaceSnapshot} disabled={dashboardRefreshLoading}>
-                    {dashboardRefreshLoading ? uiText('Синхронизация...', 'Syncing...') : uiText('Синхронизировать Pulse', 'Sync pulse')}
-                  </button>
-                </div>
-              </div>
-            </section>
-
-            <section className="pulse-tabs" role="tablist" aria-label={uiText('Фильтры Pulse', 'Pulse filters')}>
-              {PULSE_TAB_OPTIONS.map((item) => (
-                <button
-                  key={`pulse-tab-${item.value}`}
-                  type="button"
-                  role="tab"
-                  aria-selected={pulseTab === item.value}
-                  className={pulseTab === item.value ? 'active' : ''}
-                  onClick={() => setPulseTab(item.value)}
-                >
-                  <strong>{getPulseTabLabel(item)}</strong>
-                  <small>{getPulseTabHint(item)}</small>
-                  <span>{pulseTabCounts[item.value] || 0}</span>
-                </button>
-              ))}
-            </section>
-
-            <section className="pulse-focus-strip" aria-label={uiText('Приоритетная полоса', 'Priority lane')}>
-              {pulsePriorityItems.length === 0 ? (
-                <div className="pulse-empty-note">{uiText('Приоритетная полоса спокойна. Используй Pulse как обзорную доску без шума.', 'Priority lane is clear. Use Pulse as a calmer overview board.')}</div>
-              ) : (
-                pulsePriorityItems.map((item) => (
-                  <article key={`pulse-focus-${item.id}`} className={`pulse-focus-card tone-${item.tone}`.trim()}>
-                    <span>{PULSE_LANE_LABELS[item.lane] || item.lane}</span>
-                    <strong>{item.title}</strong>
-                    <p>{truncateText(item.text, 96)}</p>
-                    <button type="button" className="ghost" onClick={() => runPulseAction(item)}>
-                      {item.cta}
-                    </button>
-                  </article>
-                ))
-              )}
-            </section>
-
-            <div className="pulse-grid">
-              <aside className="pulse-sidebar">
-                <article className="pulse-side-card">
-                  <div className="pulse-card-head">
-                    <div>
-                      <strong>{uiText('Состав зон', 'Lane mix')}</strong>
-                      <span>{uiText('Открытые пункты по доменам', 'Open items by domain')}</span>
-                    </div>
-                    <small>{pulseActiveItems.length} {uiText('всего', 'total')}</small>
-                  </div>
-                  <div className="pulse-lane-list">
-                    {[PULSE_TABS.chats, PULSE_TABS.feed, PULSE_TABS.profile, PULSE_TABS.system].map((lane) => (
-                      <button
-                        key={`pulse-lane-${lane}`}
-                        type="button"
-                        className={pulseTab === lane ? 'active' : ''}
-                        onClick={() => setPulseTab(lane)}
-                      >
-                        <span>{PULSE_LANE_LABELS[lane]}</span>
-                        <strong>{pulseTabCounts[lane] || 0}</strong>
-                      </button>
-                    ))}
-                  </div>
-                </article>
-
-                <article className="pulse-side-card">
-                  <div className="pulse-card-head">
-                    <div>
-                      <strong>{uiText('Контрольная комната', 'Control room')}</strong>
-                      <span>{uiText('Быстрые маршруты по пространству', 'Quick routes across the workspace')}</span>
-                    </div>
-                    <small>{pulseResolvedCount} {uiText('готово', 'done')}</small>
-                  </div>
-                  <div className="pulse-control-stack">
-                    <button type="button" className="ghost" onClick={() => runDashboardFocusAction('unread')}>
-                      {uiText('Открыть непрочитанные чаты', 'Open unread chats')}
-                    </button>
-                    <button type="button" className="ghost" onClick={() => openFeedFocus({ filter: FEED_FILTERS.popular, sortMode: FEED_SORT_MODES.engagement, timeWindow: FEED_TIME_WINDOWS.week })}>
-                      {uiText('Открыть горячую ленту', 'Open hot feed')}
-                    </button>
-                    <button type="button" className="ghost" onClick={() => setView('profile')}>
-                      {uiText('Профиль', 'Profile lab')}
-                    </button>
-                    <button type="button" className="ghost" onClick={() => setView('dashboard')}>
-                      {uiText('Рабочая панель', 'Mission control')}
-                    </button>
-                    {pulseResolvedCount > 0 && (
-                      <button type="button" className="ghost" onClick={restoreAllPulseItems}>
-                        {uiText('Вернуть закрытые', 'Restore resolved')}
-                      </button>
-                    )}
-                  </div>
-                </article>
-
-                {pulsePinnedPreviewItems.length > 0 && (
-                  <article className="pulse-side-card">
-                    <div className="pulse-card-head">
-                      <div>
-                        <strong>{uiText('Закреплённый фокус', 'Pinned focus')}</strong>
-                        <span>{uiText('Пункты, которые ты решил держать рядом', 'Items you decided to keep nearby')}</span>
-                      </div>
-                      <small>{pulsePinnedPreviewItems.length}</small>
-                    </div>
-                    <div className="pulse-pinned-list">
-                      {pulsePinnedPreviewItems.map((item) => (
-                        <button
-                          key={`pulse-pin-preview-${item.id}`}
-                          type="button"
-                          className="pulse-pinned-item"
-                          onClick={() => runPulseAction(item)}
-                        >
-                          <strong>{item.title}</strong>
-                          <span>{item.meta || PULSE_LANE_LABELS[item.lane] || item.lane}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </article>
-                )}
-              </aside>
-
-              <section className="pulse-board">
-                <div className="pulse-card-head pulse-board-head">
-                  <div>
-                    <strong>{getPulseTabLabel(PULSE_TAB_OPTIONS.find((item) => item.value === pulseTab) || { label: 'Pulse', labelRu: 'Пульс' })}</strong>
-                    <span>{pulseVisibleItems.length} {uiText('пунктов в текущем срезе', 'items in the current scope')}</span>
-                  </div>
-                  <small>{pulseQueryNormalized ? `${uiText('запрос', 'query')}: ${pulseQueryNormalized}` : pulseWorkspaceHealth}</small>
-                </div>
-
-                {pulseVisibleItems.length === 0 ? (
-                  <div className="pulse-empty-state">
-                    <strong>{uiText('В этом режиме пока пусто.', 'No items in this view.')}</strong>
-                    <span>{uiText('Смени фильтр, очисти поиск или верни закрытые пункты, чтобы собрать доску заново.', 'Change filter, clear search, or restore resolved items to rebuild the board.')}</span>
-                  </div>
-                ) : (
-                  <div className="pulse-list">
-                    {pulseVisibleItems.map((item) => {
-                      const laneLabel = PULSE_LANE_LABELS[item.lane] || item.lane
-                      const relativeAge = item.timestamp ? formatRelativeFeedAge(item.timestamp) : ''
-                      const isPinned = pulsePinnedIdSet.has(item.id)
-                      const isArchived = pulseDismissedIdSet.has(item.id)
-                      return (
-                        <article
-                          key={item.id}
-                          className={`pulse-item tone-${item.tone || 'neutral'} ${isPinned ? 'is-pinned' : ''}`.trim()}
-                        >
-                          <div className="pulse-item-head">
-                            <div className="pulse-item-meta">
-                              <span className="pulse-lane-chip">{laneLabel}</span>
-                              {relativeAge && <span className="pulse-time-chip">{relativeAge}</span>}
-                              <span className="pulse-priority-chip">P{item.priority}</span>
-                            </div>
-                            <div className="pulse-item-tools">
-                              <button
-                                type="button"
-                                className={isPinned ? 'active' : ''}
-                                onClick={() => togglePulsePin(item.id)}
-                                title={isPinned ? uiText('Открепить пункт', 'Unpin item') : uiText('Закрепить пункт', 'Pin item')}
-                              >
-                                {isPinned ? '★' : '☆'}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => (isArchived ? restorePulseItem(item.id) : dismissPulseItem(item.id))}
-                                title={isArchived ? uiText('Вернуть пункт', 'Restore item') : uiText('Закрыть пункт', 'Resolve item')}
-                              >
-                                {isArchived ? '↺' : '✓'}
-                              </button>
-                            </div>
-                          </div>
-                          <div className="pulse-item-body">
-                            <h3>{renderHighlightedText(item.title, pulseQueryNormalized)}</h3>
-                            <p>{renderHighlightedText(item.text, pulseQueryNormalized)}</p>
-                          </div>
-                          {(item.badges || []).length > 0 && (
-                            <div className="pulse-badge-row">
-                              {item.badges.map((badge) => (
-                                <span key={`${item.id}-${badge}`} className="pulse-badge">
-                                  {badge}
-                                </span>
-                              ))}
-                            </div>
-                          )}
-                          <div className="pulse-item-footer">
-                            <span>{item.meta || uiText('Открыть пункт', 'Open item')}</span>
-                            <button type="button" className="ghost" onClick={() => runPulseAction(item)}>
-                              {item.cta}
-                            </button>
-                          </div>
-                        </article>
-                      )
-                    })}
-                  </div>
-                )}
-              </section>
-            </div>
-          </div>
-        )}
-
-        {view === 'chats' && user && (
+                {view === 'chats' && user && (
           <div className={`chat-layout chat-layout-surface ${activeConversation && chatMobilePane === 'chat' ? 'chat-layout-mobile-active' : ''}`.trim()}>
             <section className="chat-list">
               <div className="chat-list-hero">
@@ -17469,19 +17106,7 @@ export default function App() {
           >
             {icons.dashboard}
           </button>
-          <button
-            type="button"
-            style={{ display: 'none' }}
-            className={view === 'pulse' ? 'active' : ''}
-            onClick={() => openPulseWorkspace()}
-            title="Pulse"
-            aria-label={pulsePriorityCount > 0 ? `Pulse, priority items: ${pulsePriorityCount}` : 'Pulse'}
-          >
-            {icons.pulse}
-            {pulsePriorityCount > 0 && (
-              <span className="icon-rail-badge">{pulsePriorityCount > 99 ? '99+' : pulsePriorityCount}</span>
-            )}
-          </button>
+          
           <button
             type="button"
             className={view === 'feed' ? 'active' : ''}
@@ -17715,3 +17340,5 @@ export default function App() {
     </div>
   )
 }
+
+
