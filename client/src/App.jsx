@@ -11444,6 +11444,60 @@ export default function App() {
     }
   }
 
+  const navigationRailItems = user ? [
+    {
+      id: 'dashboard',
+      label: uiText('Панель', 'Deck'),
+      active: view === 'dashboard',
+      icon: icons.dashboard,
+      onClick: () => setView('dashboard')
+    },
+    {
+      id: 'feed',
+      label: uiText('Лента', 'Feed'),
+      active: view === 'feed',
+      icon: icons.feed,
+      onClick: () => setView('feed')
+    },
+    {
+      id: 'chats',
+      label: uiText('Чаты', 'Chats'),
+      active: view === 'chats',
+      icon: icons.chats,
+      badge: unreadMessagesCount > 0 ? (unreadMessagesCount > 99 ? '99+' : unreadMessagesCount) : '',
+      ariaLabel: unreadMessagesCount > 0
+        ? uiText(`Чаты, непрочитанных сообщений: ${unreadMessagesCount}`, `Chats, unread messages: ${unreadMessagesCount}`)
+        : uiText('Чаты', 'Chats'),
+      onClick: () => {
+        setView('chats')
+        setChatMobilePane('list')
+      }
+    },
+    ...(user.isAdmin
+      ? [{
+        id: 'admin',
+        label: uiText('Админ', 'Admin'),
+        active: view === 'admin',
+        icon: icons.admin,
+        onClick: () => setView('admin')
+      }]
+      : []),
+    {
+      id: 'settings',
+      label: uiText('Настройки', 'Settings'),
+      active: view === 'settings',
+      icon: icons.settings,
+      onClick: () => setView('settings')
+    },
+    {
+      id: 'profile',
+      label: uiText('Профиль', 'Profile'),
+      active: view === 'profile',
+      icon: icons.profile,
+      onClick: () => setView('profile')
+    }
+  ] : []
+
   return (
     <div className={`page page-view-${view} ${user ? 'page-authenticated' : 'page-guest'}`.trim()}>
       {showPageScene ? (
@@ -13482,81 +13536,88 @@ export default function App() {
                         </div>
                       </div>
                     )}
-                    <input
-                      ref={composerInputRef}
-                      type="text"
-                      value={messageText}
-                      onChange={handleMessageInputChange}
-                      placeholder="Сообщение..."
-                      disabled={isChatBlocked}
-                    />
-                    <label className="file-btn">
-                      Файл
+                    <div className="composer-input-row">
                       <input
-                        type="file"
-                        accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm,video/ogg,video/quicktime,.mp4,.webm,.mov,.ogv,.ogg,.m4v,.gif"
+                        ref={composerInputRef}
+                        type="text"
+                        value={messageText}
+                        onChange={handleMessageInputChange}
+                        placeholder="Сообщение..."
                         disabled={isChatBlocked}
-                        onChange={(event) => {
-                          const file = event.target.files && event.target.files[0] ? event.target.files[0] : null
-                          if (!file) {
-                            clearMessageAttachment()
+                      />
+                      <button className="primary composer-send-btn" type="submit" disabled={loading || isChatBlocked}>
+                        {uiText('Отправить', 'Send')}
+                      </button>
+                    </div>
+                    <div className="composer-tools-row">
+                      <label className="file-btn composer-tool-btn">
+                        <span>{uiText('Файл', 'File')}</span>
+                        <input
+                          type="file"
+                          accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm,video/ogg,video/quicktime,.mp4,.webm,.mov,.ogv,.ogg,.m4v,.gif"
+                          disabled={isChatBlocked}
+                          onChange={(event) => {
+                            const file = event.target.files && event.target.files[0] ? event.target.files[0] : null
+                            if (!file) {
+                              clearMessageAttachment()
+                              return
+                            }
+                            stopVideoNoteRecording(true)
+                            const isVideo = isVideoFileLike(file)
+                            setMessageFile(file)
+                            setMessageAttachmentKind(isVideo ? 'video' : 'image')
+                            setMessagePreviewType(isVideo ? 'video' : 'image')
+                            setComposerPreviewUrl(URL.createObjectURL(file))
+                          }}
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        className={`record-btn media-trigger-btn composer-tool-btn ${mediaPanelOpen ? 'active' : ''}`.trim()}
+                        onClick={() => {
+                          if (mediaPanelOpen) {
+                            setMediaPanelOpen(false)
                             return
                           }
-                          stopVideoNoteRecording(true)
-                          const isVideo = isVideoFileLike(file)
-                          setMessageFile(file)
-                          setMessageAttachmentKind(isVideo ? 'video' : 'image')
-                          setMessagePreviewType(isVideo ? 'video' : 'image')
-                          setComposerPreviewUrl(URL.createObjectURL(file))
+                          setPollComposerOpen(false)
+                          setMediaPanelTab(MEDIA_PANEL_TABS.emoji)
+                          setMediaPanelQuery('')
+                          setMediaPanelOpen(true)
+                          window.requestAnimationFrame(() => {
+                            if (composerInputRef.current) composerInputRef.current.focus()
+                          })
                         }}
-                      />
-                    </label>
-                    <button
-                      type="button"
-                      className={`record-btn media-trigger-btn ${mediaPanelOpen ? 'active' : ''}`.trim()}
-                      onClick={() => {
-                        if (mediaPanelOpen) {
+                        disabled={isChatBlocked || stickersLoading || gifsLoading}
+                        title="Emoji / Стикеры / GIF"
+                      >
+                        {stickersLoading || gifsLoading ? '...' : '😊'}
+                      </button>
+                      <button
+                        type="button"
+                        className={`record-btn poll-trigger-btn composer-tool-btn ${pollComposerOpen ? 'active' : ''}`.trim()}
+                        onClick={() => {
+                          if (pollComposerOpen) {
+                            closePollComposer()
+                            return
+                          }
+                          setPollComposerOpen(true)
                           setMediaPanelOpen(false)
-                          return
-                        }
-                        setPollComposerOpen(false)
-                        setMediaPanelTab(MEDIA_PANEL_TABS.emoji)
-                        setMediaPanelQuery('')
-                        setMediaPanelOpen(true)
-                        window.requestAnimationFrame(() => {
-                          if (composerInputRef.current) composerInputRef.current.focus()
-                        })
-                      }}
-                      disabled={isChatBlocked || stickersLoading || gifsLoading}
-                      title="Emoji / Стикеры / GIF"
-                    >
-                      {stickersLoading || gifsLoading ? '...' : '😊'}
-                    </button>
-                    <button
-                      type="button"
-                      className={`record-btn poll-trigger-btn ${pollComposerOpen ? 'active' : ''}`.trim()}
-                      onClick={() => {
-                        if (pollComposerOpen) {
-                          closePollComposer()
-                          return
-                        }
-                        setPollComposerOpen(true)
-                        setMediaPanelOpen(false)
-                      }}
-                      disabled={isChatBlocked}
-                      title="Создать опрос"
-                    >
-                      📊
-                    </button>
-                    <button
-                      type="button"
-                      className={`record-btn ${videoNoteRecording ? 'recording' : ''}`}
-                      onClick={toggleVideoNoteRecording}
-                      disabled={isChatBlocked}
-                    >
-                      {videoNoteRecording ? `Стоп ${videoNoteDuration}с` : 'Кружок'}
-                    </button>
-                    <button className="primary" type="submit" disabled={loading || isChatBlocked}>Отправить</button>
+                        }}
+                        disabled={isChatBlocked}
+                        title="Создать опрос"
+                      >
+                        📊
+                      </button>
+                      <button
+                        type="button"
+                        className={`record-btn composer-tool-btn ${videoNoteRecording ? 'recording' : ''}`}
+                        onClick={toggleVideoNoteRecording}
+                        disabled={isChatBlocked}
+                        title={videoNoteRecording ? uiText('Остановить запись', 'Stop recording') : uiText('Записать видео', 'Record video')}
+                      >
+                        {videoNoteRecording ? uiText(`Стоп ${videoNoteDuration}с`, `Stop ${videoNoteDuration}s`) : uiText('Видео', 'Video')}
+                      </button>
+                    </div>
                   </form>
                   {commandSuggestions.length > 0 && !mediaPanelOpen && !pollComposerOpen && (
                     <div className="command-hints">
@@ -17630,63 +17691,22 @@ export default function App() {
         )}
       </main>
 
-      {user && (
+      {user && navigationRailItems.length > 0 && (
         <div className="icon-rail icon-rail-root">
-          <button
-            type="button"
-            className={view === 'dashboard' ? 'active' : ''}
-            onClick={() => setView('dashboard')}
-            title="Панель"
-          >
-            {icons.dashboard}
-          </button>
-          
-          <button
-            type="button"
-            className={view === 'feed' ? 'active' : ''}
-            onClick={() => setView('feed')}
-            title="Лента"
-          >
-            {icons.feed}
-          </button>
-          <button
-            type="button"
-            className={view === 'chats' ? 'active' : ''}
-            onClick={() => setView('chats')}
-            title="Чаты"
-            aria-label={unreadMessagesCount > 0 ? `Чаты, непрочитанных сообщений: ${unreadMessagesCount}` : 'Чаты'}
-          >
-            {icons.chats}
-            {unreadMessagesCount > 0 && (
-              <span className="icon-rail-badge">{unreadMessagesCount > 99 ? '99+' : unreadMessagesCount}</span>
-            )}
-          </button>
-          {user.isAdmin && (
+          {navigationRailItems.map((item) => (
             <button
+              key={item.id}
               type="button"
-              className={view === 'admin' ? 'active' : ''}
-              onClick={() => setView('admin')}
-              title="Админ"
+              className={item.active ? 'active' : ''}
+              onClick={item.onClick}
+              title={item.label}
+              aria-label={item.ariaLabel || item.label}
             >
-              {icons.admin}
+              {item.icon}
+              {item.badge ? <span className="icon-rail-badge">{item.badge}</span> : null}
+              <span className="icon-rail-label">{item.label}</span>
             </button>
-          )}
-          <button
-            type="button"
-            className={view === 'settings' ? 'active' : ''}
-            onClick={() => setView('settings')}
-            title="Настройки"
-          >
-            {icons.settings}
-          </button>
-          <button
-            type="button"
-            className={view === 'profile' ? 'active' : ''}
-            onClick={() => setView('profile')}
-            title="Профиль"
-          >
-            {icons.profile}
-          </button>
+          ))}
         </div>
       )}
 
