@@ -602,6 +602,12 @@ const FUN_COMMANDS = [
   { command: '/spoiler', template: '/spoiler ', description: 'Скрытый текст' },
   { command: '/nudge', template: '/nudge', description: 'Пнуть собеседника' }
 ]
+const MOBILE_CHAT_QUICK_REPLIES = [
+  { id: 'hello', ru: 'Привет 👋', en: 'Hey 👋' },
+  { id: 'thanks', ru: 'Спасибо', en: 'Thanks' },
+  { id: 'review', ru: 'Сейчас посмотрю', en: 'Checking now' },
+  { id: 'later', ru: 'Напишу чуть позже', en: 'I will reply a bit later' }
+]
 const POLL_OPTION_MIN_COUNT = 2
 const POLL_OPTION_MAX_COUNT = 10
 const INITIAL_POLL_DRAFT = {
@@ -3047,6 +3053,14 @@ export default function App() {
       .filter((item) => item.command.slice(1).includes(query))
       .slice(0, 6)
   }, [activeConversation, isChatBlocked, messageFile, messageText])
+  const mobileChatQuickReplies = useMemo(() => {
+    if (!activeConversation || isChatBlocked || messageFile || pollComposerOpen) return []
+    if (String(messageText || '').trim().length > 0) return []
+    return MOBILE_CHAT_QUICK_REPLIES.map((item) => ({
+      id: item.id,
+      label: isEnglishUi ? item.en : item.ru
+    }))
+  }, [activeConversation, isChatBlocked, isEnglishUi, messageFile, messageText, pollComposerOpen])
   const feedQueryNormalized = feedQuery.trim().toLowerCase()
   const composerHashtags = useMemo(() => {
     const seen = new Set()
@@ -13446,6 +13460,19 @@ export default function App() {
                     </div>,
                   document.body
                 )}
+                  {mobileChatQuickReplies.length > 0 && (
+                    <div className="chat-quick-replies" aria-label={uiText('Быстрые ответы', 'Quick replies')}>
+                      {mobileChatQuickReplies.map((item) => (
+                        <button
+                          key={`chat-quick-reply-${item.id}`}
+                          type="button"
+                          onClick={() => applyCommandSuggestion(item.label)}
+                        >
+                          {item.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                   <form className={`composer ${isChatBlocked ? 'disabled' : ''}`} onSubmit={handleSendMessage}>
                     {replyMessage && (
                       <div className="composer-reply">
