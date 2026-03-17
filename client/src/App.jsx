@@ -435,7 +435,7 @@ const CHAT_ALIAS_STORAGE_KEY = 'ktk_chat_aliases'
 const RECENT_STICKERS_STORAGE_KEY = 'ktk_recent_stickers'
 const RECENT_GIFS_STORAGE_KEY = 'ktk_recent_gifs'
 const RECENT_EMOJIS_STORAGE_KEY = 'ktk_recent_emojis'
-const UI_PREFERENCES_STORAGE_KEY = 'ktk_ui_preferences_v1'
+const UI_PREFERENCES_STORAGE_KEY = 'ktk_ui_preferences_v2'
 const UI_CUSTOM_THEME_PRESETS_STORAGE_KEY = 'ktk_ui_custom_theme_presets_v1'
 const UI_CUSTOM_THEME_PRESET_LIMIT = 24
 const PROFILE_SHOWCASE_STORAGE_KEY = 'ktk_profile_showcase_v1'
@@ -1054,29 +1054,29 @@ const PROFILE_VISUAL_SCENE_PRESETS = [
 const THEME_PACK_VERSION = 1
 const THEME_PACK_KIND = 'ktk-ui-theme'
 const DEFAULT_UI_PREFERENCES = {
-  style: 'glass',
+  style: 'classic',
   density: 'comfortable',
-  backdropMode: 'aurora',
-  chrome: 'balanced',
-  ambient: 58,
-  radius: 22,
-  lineStrength: 100,
-  syncAccent: true,
+  backdropMode: 'studio',
+  chrome: 'soft',
+  ambient: 24,
+  radius: 16,
+  lineStrength: 72,
+  syncAccent: false,
   outlineMode: 'auto',
   customPalette: false,
-  glowEnabled: true,
-  bgColor: '#0f0c0d',
-  panelColor: '#171113',
-  panel2Color: '#1d1517',
-  cardColor: '#201719',
-  textColor: '#f6f2f2',
-  mutedColor: '#c5b8b8',
-  outlineColor: '#38bdf8',
-  stripeColor: '#38bdf8',
-  chatAccentColor: '#38bdf8',
-  feedAccentColor: '#7a1f1d',
-  accentColor: '#7a1f1d',
-  accent2Color: '#b64d45'
+  glowEnabled: false,
+  bgColor: '#101418',
+  panelColor: '#151a20',
+  panel2Color: '#1b2128',
+  cardColor: '#1f262e',
+  textColor: '#ecf1f7',
+  mutedColor: '#9aa6b2',
+  outlineColor: '#667281',
+  stripeColor: '#4c5969',
+  chatAccentColor: '#5f7085',
+  feedAccentColor: '#6b7280',
+  accentColor: '#4b5563',
+  accent2Color: '#6b7280'
 }
 const DEFAULT_PROFILE_SHOWCASE = {
   headline: '',
@@ -11365,7 +11365,7 @@ export default function App() {
     user,
     view
   ])
-  const showPageScene = view === 'settings' && settingsSection === 'appearance'
+  const showPageScene = false
 
   const runWorkspaceStripAction = (actionId) => {
     if (!actionId) return
