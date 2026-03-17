@@ -2121,6 +2121,8 @@ export default function App() {
   const [conversations, setConversations] = useState([])
   const [activeConversation, setActiveConversation] = useState(null)
   const [messages, setMessages] = useState([])
+  const [conversationsLoading, setConversationsLoading] = useState(false)
+  const [messagesLoading, setMessagesLoading] = useState(false)
   const [messageText, setMessageText] = useState('')
   const [replyMessage, setReplyMessage] = useState(null)
   const [bookmarkPanelOpen, setBookmarkPanelOpen] = useState(false)
@@ -5541,6 +5543,7 @@ export default function App() {
     loadPosts()
 
     const loadConversations = async () => {
+      setConversationsLoading(true)
       try {
         const data = await getConversations()
         const list = data.conversations || []
@@ -5571,6 +5574,8 @@ export default function App() {
         setActiveConversation(nextActive)
       } catch (err) {
         setStatus({ type: 'error', message: err.message })
+      } finally {
+        setConversationsLoading(false)
       }
     }
     loadConversations()
@@ -5585,6 +5590,7 @@ export default function App() {
   useEffect(() => {
     if (!activeConversation) {
       setMessages([])
+      setMessagesLoading(false)
       setPollVoteLoadingByMessage({})
       setConversationBookmarks([])
       setBookmarkPanelOpen(false)
@@ -5595,12 +5601,15 @@ export default function App() {
     setPollDraft(INITIAL_POLL_DRAFT)
     setBookmarkPanelOpen(false)
     const loadMessages = async () => {
+      setMessagesLoading(true)
       try {
         const data = await getMessages(activeConversation.id)
         setMessages((data.messages || []).map(normalizeChatMessage))
         await clearConversationUnread(activeConversation.id)
       } catch (err) {
         setStatus({ type: 'error', message: err.message })
+      } finally {
+        setMessagesLoading(false)
       }
     }
     loadConversationBookmarks(activeConversation.id, { silent: true })
@@ -12588,10 +12597,27 @@ export default function App() {
               </div>
 
               <div className="chat-items">
-                {conversations.length === 0 && (
+                {conversationsLoading && (
+                  <div className="chat-skeleton-list" aria-hidden="true">
+                    {Array.from({ length: 5 }).map((_, index) => (
+                      <div key={`chat-list-skeleton-${index}`} className="chat-item-skeleton">
+                        <span className="chat-skeleton-avatar" />
+                        <div className="chat-skeleton-copy">
+                          <span className="chat-skeleton-line short" />
+                          <span className="chat-skeleton-line" />
+                        </div>
+                        <div className="chat-skeleton-side">
+                          <span className="chat-skeleton-line tiny" />
+                          <span className="chat-skeleton-pill" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {!conversationsLoading && conversations.length === 0 && (
                   <div className="empty">Пока нет диалогов. Найди пользователя по username.</div>
                 )}
-                {conversations.length > 0 && visibleConversations.length === 0 && (
+                {!conversationsLoading && conversations.length > 0 && visibleConversations.length === 0 && (
                   <div className="empty">
                     {chatListFilter === CHAT_LIST_FILTERS.unread
                       ? 'Непрочитанных диалогов пока нет.'
@@ -13195,12 +13221,28 @@ export default function App() {
                     )}
                   </div>
                   <div className={`chat-messages ${chatShaking ? 'nudge-shake' : ''}`.trim()} ref={chatMessagesRef}>
-                    {filteredMessages.length === 0 && (
+                    {messagesLoading && (
+                      <div className="chat-message-skeleton-list" aria-hidden="true">
+                        {Array.from({ length: 4 }).map((_, index) => (
+                          <div
+                            key={`chat-message-skeleton-${index}`}
+                            className={`chat-message-skeleton-row ${index % 2 === 1 ? 'mine' : ''}`.trim()}
+                          >
+                            <div className="chat-message-skeleton-bubble">
+                              <span className="chat-skeleton-line short" />
+                              <span className="chat-skeleton-line" />
+                              <span className="chat-skeleton-line medium" />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {!messagesLoading && filteredMessages.length === 0 && (
                       <div className="empty">
                         {chatSearchQuery ? 'Сообщения не найдены.' : 'Напишите первое сообщение.'}
                       </div>
                     )}
-                  {filteredMessages.map((msg) => (
+                  {!messagesLoading && filteredMessages.map((msg) => (
                       <div
                         key={msg.id}
                         id={`message-${msg.id}`}
