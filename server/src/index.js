@@ -51,6 +51,8 @@ const webPushSubject = process.env.WEB_PUSH_SUBJECT || 'mailto:admin@example.com
 const webPushPublicKey = process.env.WEB_PUSH_PUBLIC_KEY || ''
 const webPushPrivateKey = process.env.WEB_PUSH_PRIVATE_KEY || ''
 const webPushEnabled = Boolean(webPushPublicKey && webPushPrivateKey)
+const pushNotificationIcon = '/pwa-icon.svg'
+const pushNotificationBadge = '/pwa-badge.svg'
 const profileStatusTextMaxLength = 80
 const profileStatusEmojiMaxLength = 16
 const stickerTitleMaxLength = 48
@@ -381,6 +383,13 @@ function normalizeLogin(value) {
 
 function normalizeUsername(value) {
   return String(value || '').trim().toLowerCase()
+}
+
+function extractMentionedUsernames(value) {
+  const matches = String(value || '').match(/@([a-z0-9_]{3,})/gi) || []
+  return Array.from(new Set(matches
+    .map((item) => normalizeUsername(String(item || '').replace(/^@/, '')))
+    .filter(Boolean)))
 }
 
 function isValidUsername(value) {
@@ -2356,6 +2365,57 @@ async function getConversationMemberIds(conversationId) {
   return result.rows.map((row) => row.user_id)
 }
 
+async function getUserIdentityById(userId) {
+  if (!isValidUuid(userId)) return null
+  const result = await pool.query(
+    `select id, username, display_name
+     from users
+     where id = $1
+     limit 1`,
+    [userId]
+  )
+  return result.rowCount > 0 ? result.rows[0] : null
+}
+
+async function getUserIdsByUsernames(usernames, excludedUserIds = []) {
+  const normalizedUsernames = Array.from(new Set((Array.isArray(usernames) ? usernames : [])
+    .map((item) => normalizeUsername(item))
+    .filter(Boolean)))
+  if (normalizedUsernames.length === 0) return []
+
+  const excluded = new Set((Array.isArray(excludedUserIds) ? excludedUserIds : [])
+    .map((item) => String(item || '').trim())
+    .filter(Boolean))
+  const result = await pool.query(
+    `select id
+     from users
+     where username = any($1::text[])`,
+    [normalizedUsernames]
+  )
+  return Array.from(new Set(result.rows
+    .map((row) => String(row.id || '').trim())
+    .filter((userId) => userId && !excluded.has(userId))))
+}
+
+function createPushPayload(payload = {}) {
+  const url = typeof payload.url === 'string' && payload.url.trim() ? payload.url.trim() : '/'
+  return {
+    title: typeof payload.title === 'string' && payload.title.trim() ? payload.title.trim() : 'KTK Messenger',
+    body: typeof payload.body === 'string' ? payload.body.trim() : '',
+    url,
+    tag: typeof payload.tag === 'string' && payload.tag.trim() ? payload.tag.trim() : 'ktk-general',
+    conversationId: typeof payload.conversationId === 'string' ? payload.conversationId : null,
+    messageId: typeof payload.messageId === 'string' ? payload.messageId : null,
+    postId: typeof payload.postId === 'string' ? payload.postId : null,
+    username: typeof payload.username === 'string' ? payload.username : null,
+    settingsSection: typeof payload.settingsSection === 'string' ? payload.settingsSection : null,
+    openComments: payload.openComments === true,
+    icon: typeof payload.icon === 'string' && payload.icon.trim() ? payload.icon.trim() : pushNotificationIcon,
+    badge: typeof payload.badge === 'string' && payload.badge.trim() ? payload.badge.trim() : pushNotificationBadge,
+    skipWhenVisible: payload.skipWhenVisible !== false
+  }
+}
+
 function parsePushSubscriptionPayload(payload) {
   if (!payload || typeof payload !== 'object') return null
   const endpoint = typeof payload.endpoint === 'string' ? payload.endpoint.trim() : ''
@@ -2391,6 +2451,7 @@ async function removePushSubscription(userId, endpoint) {
 }
 
 function shouldSendPushToUser(userId, conversationId) {
+  if (!conversationId) return true
   const socketIds = getSocketIdsForUser(userId)
   if (socketIds.length === 0) return true
   return !socketIds.some((socketId) => {
@@ -2404,6 +2465,7 @@ async function sendPushToUsers(userIds, payload) {
   if (!webPushEnabled) return
   const targets = Array.from(new Set((userIds || []).filter((id) => typeof id === 'string')))
   if (targets.length === 0) return
+  const normalizedPayload = createPushPayload(payload)
 
   const subscriptions = await pool.query(
     `select user_id, endpoint, p256dh, auth
@@ -2413,9 +2475,9 @@ async function sendPushToUsers(userIds, payload) {
   )
   if (subscriptions.rowCount === 0) return
 
-  const body = JSON.stringify(payload)
+  const body = JSON.stringify(normalizedPayload)
   await Promise.all(subscriptions.rows.map(async (row) => {
-    if (!shouldSendPushToUser(row.user_id, payload.conversationId || null)) return
+    if (!shouldSendPushToUser(row.user_id, normalizedPayload.conversationId || null)) return
     try {
       await webpush.sendNotification({
         endpoint: row.endpoint,
@@ -2426,7 +2488,7 @@ async function sendPushToUsers(userIds, payload) {
       }, body, {
         TTL: 60,
         urgency: 'high',
-        topic: payload.tag || undefined
+        topic: normalizedPayload.tag || undefined
       })
     } catch (err) {
       if (err && (err.statusCode === 404 || err.statusCode === 410)) {
@@ -2434,6 +2496,17 @@ async function sendPushToUsers(userIds, payload) {
       }
     }
   }))
+}
+
+async function notifyUserAboutAdminAction(userId, payload = {}) {
+  if (!userId || typeof userId !== 'string') return
+  const normalizedPayload = createPushPayload({
+    url: '/?settings=security',
+    settingsSection: 'security',
+    skipWhenVisible: false,
+    ...payload
+  })
+  await sendPushToUsers([userId], normalizedPayload)
 }
 
 io.use(async (socket, next) => {
@@ -3958,7 +4031,13 @@ app.get('/api/users/:username/tracks', auth, ensureNotBanned, async (req, res) =
 app.post('/api/users/:username/subscribe', auth, ensureNotBanned, async (req, res) => {
   try {
     const username = normalizeUsername(req.params.username)
-    const targetResult = await pool.query('select id from users where username = $1', [username])
+    const targetResult = await pool.query(
+      `select id, username, display_name
+       from users
+       where username = $1
+       limit 1`,
+      [username]
+    )
     if (targetResult.rowCount === 0) return res.status(404).json({ error: 'User not found' })
 
     const targetId = targetResult.rows[0].id
@@ -3987,6 +4066,24 @@ app.post('/api/users/:username/subscribe', auth, ensureNotBanned, async (req, re
         [req.userId, targetId]
       )
       subscribed = true
+    }
+
+    if (subscribed) {
+      const actor = await getUserIdentityById(req.userId)
+      if (actor && actor.id !== targetId) {
+        const actorName = actor.display_name || actor.username || 'New follower'
+        const pushPayload = createPushPayload({
+          title: 'Новый подписчик',
+          body: `${actorName} подписался на ваш профиль.`,
+          url: `/?profile=${encodeURIComponent(actor.username)}`,
+          tag: `profile-follow-${actor.id}`,
+          username: actor.username,
+          skipWhenVisible: false
+        })
+        void sendPushToUsers([targetId], pushPayload).catch((pushErr) => {
+          console.error('Push send error', pushErr)
+        })
+      }
     }
 
     const user = await getUserByIdWithStats(targetId, req.userId)
@@ -5328,6 +5425,27 @@ app.post('/api/posts', uploadLimiter, auth, ensureNotBanned, imageUpload.single(
     if (post) {
       io.emit('post:new', { post })
     }
+    const mentionedUserIds = await getUserIdsByUsernames(
+      extractMentionedUsernames(body),
+      [req.userId]
+    )
+    if (mentionedUserIds.length > 0) {
+      const actor = await getUserIdentityById(req.userId)
+      if (actor) {
+        const actorName = actor.display_name || actor.username || 'New mention'
+        const pushPayload = createPushPayload({
+          title: 'Упоминание в посте',
+          body: `${actorName} упомянул вас в посте.`,
+          url: `/?post=${encodeURIComponent(result.rows[0].id)}`,
+          tag: `post-mention-${result.rows[0].id}`,
+          postId: result.rows[0].id,
+          skipWhenVisible: false
+        })
+        void sendPushToUsers(mentionedUserIds, pushPayload).catch((pushErr) => {
+          console.error('Push send error', pushErr)
+        })
+      }
+    }
     res.json({ post })
   } catch (err) {
     console.error('Create post error', err)
@@ -5338,6 +5456,15 @@ app.post('/api/posts', uploadLimiter, auth, ensureNotBanned, imageUpload.single(
 app.post('/api/posts/:id/like', auth, ensureNotBanned, async (req, res) => {
   try {
     const postId = req.params.id
+    const postResult = await pool.query(
+      `select p.author_id
+       from posts p
+       where p.id = $1
+         and p.deleted_at is null
+       limit 1`,
+      [postId]
+    )
+    if (postResult.rowCount === 0) return res.status(404).json({ error: 'Post not found' })
     const existing = await pool.query(
       'select 1 from post_likes where post_id = $1 and user_id = $2',
       [postId, req.userId]
@@ -5348,6 +5475,24 @@ app.post('/api/posts/:id/like', auth, ensureNotBanned, async (req, res) => {
       await pool.query('insert into post_likes (post_id, user_id) values ($1, $2)', [postId, req.userId])
     }
     const count = await pool.query('select count(*) from post_likes where post_id = $1', [postId])
+    if (existing.rowCount === 0) {
+      const postAuthorId = postResult.rows[0].author_id
+      const actor = await getUserIdentityById(req.userId)
+      if (actor && postAuthorId !== req.userId) {
+        const actorName = actor.display_name || actor.username || 'New like'
+        const pushPayload = createPushPayload({
+          title: 'Новый лайк',
+          body: `${actorName} оценил ваш пост.`,
+          url: `/?post=${encodeURIComponent(postId)}`,
+          tag: `post-like-${postId}`,
+          postId,
+          skipWhenVisible: false
+        })
+        void sendPushToUsers([postAuthorId], pushPayload).catch((pushErr) => {
+          console.error('Push send error', pushErr)
+        })
+      }
+    }
     res.json({ liked: existing.rowCount === 0, likesCount: Number(count.rows[0].count) })
   } catch (err) {
     console.error('Like error', err)
@@ -5398,6 +5543,24 @@ app.post('/api/posts/:id/repost', auth, ensureNotBanned, async (req, res) => {
     if (deletedPostId) {
       io.emit('post:delete', { postId: deletedPostId })
     }
+    if (existing.rowCount === 0) {
+      const actor = await getUserIdentityById(req.userId)
+      const postAuthorId = original.rows[0].author_id
+      if (actor && postAuthorId !== req.userId) {
+        const actorName = actor.display_name || actor.username || 'New repost'
+        const pushPayload = createPushPayload({
+          title: 'Ваш пост репостнули',
+          body: `${actorName} добавил ваш пост к себе.`,
+          url: `/?post=${encodeURIComponent(postId)}`,
+          tag: `post-repost-${postId}`,
+          postId,
+          skipWhenVisible: false
+        })
+        void sendPushToUsers([postAuthorId], pushPayload).catch((pushErr) => {
+          console.error('Push send error', pushErr)
+        })
+      }
+    }
     res.json({ reposted: existing.rowCount === 0, repostsCount: Number(count.rows[0].count) })
   } catch (err) {
     console.error('Repost error', err)
@@ -5441,6 +5604,15 @@ app.post('/api/posts/:id/comments', auth, ensureNotBanned, async (req, res) => {
   try {
     const postId = req.params.id
     const body = String(req.body.body || '').trim()
+    const postResult = await pool.query(
+      `select p.author_id
+       from posts p
+       where p.id = $1
+         and p.deleted_at is null
+       limit 1`,
+      [postId]
+    )
+    if (postResult.rowCount === 0) return res.status(404).json({ error: 'Post not found' })
     if (!body) return res.status(400).json({ error: 'РљРѕРјРјРµРЅС‚Р°СЂРёР№ РїСѓСЃС‚' })
     const result = await pool.query(
       `insert into post_comments (post_id, user_id, body)
@@ -5466,6 +5638,41 @@ app.post('/api/posts/:id/comments', auth, ensureNotBanned, async (req, res) => {
         }
       }
     })
+    const actor = userRow.rowCount > 0 ? userRow.rows[0] : await getUserIdentityById(req.userId)
+    const actorName = actor ? (actor.display_name || actor.username || 'New comment') : 'New comment'
+    const postAuthorId = postResult.rows[0].author_id
+    if (postAuthorId && postAuthorId !== req.userId) {
+      const pushPayload = createPushPayload({
+        title: 'Новый комментарий',
+        body: `${actorName} оставил комментарий к вашему посту.`,
+        url: `/?post=${encodeURIComponent(postId)}&comments=1`,
+        tag: `post-comment-${postId}`,
+        postId,
+        openComments: true,
+        skipWhenVisible: false
+      })
+      void sendPushToUsers([postAuthorId], pushPayload).catch((pushErr) => {
+        console.error('Push send error', pushErr)
+      })
+    }
+    const mentionedUserIds = await getUserIdsByUsernames(
+      extractMentionedUsernames(body),
+      [req.userId, postAuthorId]
+    )
+    if (mentionedUserIds.length > 0) {
+      const mentionPayload = createPushPayload({
+        title: 'Упоминание в комментарии',
+        body: `${actorName} упомянул вас в комментариях.`,
+        url: `/?post=${encodeURIComponent(postId)}&comments=1`,
+        tag: `comment-mention-${postId}`,
+        postId,
+        openComments: true,
+        skipWhenVisible: false
+      })
+      void sendPushToUsers(mentionedUserIds, mentionPayload).catch((pushErr) => {
+        console.error('Push send error', pushErr)
+      })
+    }
   } catch (err) {
     console.error('Create comment error', err)
     res.status(500).json({ error: 'Unexpected error' })
@@ -6387,6 +6594,23 @@ app.post('/api/admin/verify', auth, adminOnly, async (req, res) => {
         isVerified: result.rows[0].is_verified === true
       }
     })
+
+    const actor = await getUserIdentityById(req.userId)
+    const actorName = actor ? (actor.display_name || actor.username || 'Administrator') : 'Administrator'
+    const verificationPayload = verified
+      ? {
+        title: 'Профиль подтверждён',
+        body: `${actorName} подтвердил ваш профиль.`,
+        tag: `account-verified-${userId}`
+      }
+      : {
+        title: 'Подтверждение профиля снято',
+        body: `${actorName} отменил верификацию вашего профиля.`,
+        tag: `account-unverified-${userId}`
+      }
+    void notifyUserAboutAdminAction(userId, verificationPayload).catch((pushErr) => {
+      console.error('Push send error', pushErr)
+    })
   } catch (err) {
     if (err && err.code === '42703') {
       return res.status(503).json({ error: 'Verification column missing: schema migration required' })
@@ -6596,6 +6820,25 @@ app.post('/api/admin/verification-requests/:id/review', auth, adminOnly, async (
         }
         : null
     })
+
+    const actor = await getUserIdentityById(req.userId)
+    const actorName = actor ? (actor.display_name || actor.username || 'Administrator') : 'Administrator'
+    const reviewPayload = decision === 'approved'
+      ? {
+        title: 'Верификация одобрена',
+        body: `${actorName} одобрил вашу заявку на верификацию.`,
+        tag: `verification-approved-${current.rows[0].user_id}`
+      }
+      : {
+        title: 'Верификация отклонена',
+        body: adminNote
+          ? `${actorName} отклонил заявку: ${adminNote}`
+          : `${actorName} отклонил вашу заявку на верификацию.`,
+        tag: `verification-rejected-${current.rows[0].user_id}`
+      }
+    void notifyUserAboutAdminAction(current.rows[0].user_id, reviewPayload).catch((pushErr) => {
+      console.error('Push send error', pushErr)
+    })
   } catch (err) {
     try {
       await client.query('rollback')
@@ -6622,8 +6865,24 @@ app.post('/api/admin/ban', auth, adminOnly, async (req, res) => {
     if (!guard.ok) {
       return res.status(guard.status).json({ error: guard.error })
     }
-    await pool.query('update users set is_banned = true where id = $1', [userId])
+    const userResult = await pool.query(
+      'update users set is_banned = true where id = $1 returning id, username',
+      [userId]
+    )
+    if (userResult.rowCount === 0) {
+      return res.status(404).json({ error: 'User not found' })
+    }
     res.json({ ok: true })
+
+    const actor = await getUserIdentityById(req.userId)
+    const actorName = actor ? (actor.display_name || actor.username || 'Administrator') : 'Administrator'
+    void notifyUserAboutAdminAction(userId, {
+      title: 'Аккаунт временно заблокирован',
+      body: `${actorName} ограничил доступ к вашему аккаунту.`,
+      tag: `account-banned-${userId}`
+    }).catch((pushErr) => {
+      console.error('Push send error', pushErr)
+    })
   } catch (err) {
     console.error('Ban error', err)
     res.status(500).json({ error: 'Unexpected error' })
@@ -6640,8 +6899,24 @@ app.post('/api/admin/unban', auth, adminOnly, async (req, res) => {
     if (!guard.ok) {
       return res.status(guard.status).json({ error: guard.error })
     }
-    await pool.query('update users set is_banned = false where id = $1', [userId])
+    const userResult = await pool.query(
+      'update users set is_banned = false where id = $1 returning id, username',
+      [userId]
+    )
+    if (userResult.rowCount === 0) {
+      return res.status(404).json({ error: 'User not found' })
+    }
     res.json({ ok: true })
+
+    const actor = await getUserIdentityById(req.userId)
+    const actorName = actor ? (actor.display_name || actor.username || 'Administrator') : 'Administrator'
+    void notifyUserAboutAdminAction(userId, {
+      title: 'Доступ восстановлен',
+      body: `${actorName} снял блокировку с вашего аккаунта.`,
+      tag: `account-unbanned-${userId}`
+    }).catch((pushErr) => {
+      console.error('Push send error', pushErr)
+    })
   } catch (err) {
     console.error('Unban error', err)
     res.status(500).json({ error: 'Unexpected error' })
@@ -6665,6 +6940,18 @@ app.post('/api/admin/warn', auth, adminOnly, async (req, res) => {
     )
     await pool.query('update users set warnings_count = warnings_count + 1 where id = $1', [userId])
     res.json({ ok: true })
+
+    const actor = await getUserIdentityById(req.userId)
+    const actorName = actor ? (actor.display_name || actor.username || 'Administrator') : 'Administrator'
+    void notifyUserAboutAdminAction(userId, {
+      title: 'Предупреждение от администрации',
+      body: reason
+        ? `${actorName} оставил предупреждение: ${reason}`
+        : `${actorName} оставил предупреждение для вашего аккаунта.`,
+      tag: `account-warning-${userId}-${Date.now()}`
+    }).catch((pushErr) => {
+      console.error('Push send error', pushErr)
+    })
   } catch (err) {
     console.error('Warn error', err)
     res.status(500).json({ error: 'Unexpected error' })
@@ -6761,6 +7048,19 @@ app.post('/api/admin/reset-password', auth, adminOnly, async (req, res) => {
       userId,
       username: userResult.rows[0].username,
       revokedCount
+    })
+
+    const actor = await getUserIdentityById(req.userId)
+    const actorName = actor ? (actor.display_name || actor.username || 'Administrator') : 'Administrator'
+    const revokeSuffix = revokeSessions && revokedCount > 0
+      ? ` Активные сессии завершены: ${revokedCount}.`
+      : ''
+    void notifyUserAboutAdminAction(userId, {
+      title: 'Пароль изменён администратором',
+      body: `${actorName} обновил пароль вашего аккаунта.${revokeSuffix}`.trim(),
+      tag: `password-reset-${userId}`
+    }).catch((pushErr) => {
+      console.error('Push send error', pushErr)
     })
   } catch (err) {
     console.error('Admin reset password error', err)

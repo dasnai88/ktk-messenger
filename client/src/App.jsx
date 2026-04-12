@@ -415,13 +415,14 @@ const apiOrigin = apiBase.endsWith('/api') ? apiBase.slice(0, -4) : ''
 const mediaBase = (import.meta.env.VITE_MEDIA_BASE || import.meta.env.VITE_SOCKET_URL || apiOrigin || '').replace(/\/$/, '')
 const webPushFeatureFlag = String(import.meta.env.VITE_ENABLE_WEB_PUSH || 'auto').trim().toLowerCase()
 const webPushFeatureEnabled = !['false', '0', 'off', 'disabled'].includes(webPushFeatureFlag)
+const LEGACY_PUSH_OPEN_STORAGE_KEY = 'ktk_push_open_conversation'
+const PUSH_OPEN_STORAGE_KEY = 'ktk_push_open_intent_v2'
 const AVATAR_ZOOM_MIN = 1
 const AVATAR_ZOOM_MAX = 2.5
 const BANNER_ZOOM_MIN = 1
 const BANNER_ZOOM_MAX = 3.2
 const BANNER_EXPORT_WIDTH = 1600
 const BANNER_EXPORT_HEIGHT = 520
-const PUSH_OPEN_STORAGE_KEY = 'ktk_push_open_conversation'
 const DRAFT_STORAGE_KEY = 'ktk_message_drafts'
 const FEED_BOOKMARKS_STORAGE_KEY = 'ktk_feed_bookmarks'
 const FEED_EXPLORER_STORAGE_KEY = 'ktk_feed_explorer_v1'
@@ -1749,6 +1750,185 @@ function urlBase64ToUint8Array(value) {
   return outputArray
 }
 
+function getPushSupportSnapshot() {
+  const secureContext = typeof window !== 'undefined' && window.isSecureContext === true
+  const serviceWorkerSupported = typeof navigator !== 'undefined' && 'serviceWorker' in navigator
+  const pushManagerSupported = typeof window !== 'undefined' && 'PushManager' in window
+  const notificationSupported = typeof window !== 'undefined' && 'Notification' in window
+
+  if (!webPushFeatureEnabled) {
+    return {
+      supported: false,
+      reason: 'feature-disabled',
+      message: 'Push is disabled for this build.',
+      secureContext,
+      serviceWorkerSupported,
+      pushManagerSupported,
+      notificationSupported
+    }
+  }
+  if (!secureContext) {
+    return {
+      supported: false,
+      reason: 'insecure-context',
+      message: 'Push requires HTTPS with a valid SSL certificate.',
+      secureContext,
+      serviceWorkerSupported,
+      pushManagerSupported,
+      notificationSupported
+    }
+  }
+  if (!serviceWorkerSupported) {
+    return {
+      supported: false,
+      reason: 'service-worker-unavailable',
+      message: 'This browser does not support service workers.',
+      secureContext,
+      serviceWorkerSupported,
+      pushManagerSupported,
+      notificationSupported
+    }
+  }
+  if (!pushManagerSupported) {
+    return {
+      supported: false,
+      reason: 'push-manager-unavailable',
+      message: 'This browser does not support PushManager.',
+      secureContext,
+      serviceWorkerSupported,
+      pushManagerSupported,
+      notificationSupported
+    }
+  }
+  if (!notificationSupported) {
+    return {
+      supported: false,
+      reason: 'notification-api-unavailable',
+      message: 'This browser does not expose the Notification API.',
+      secureContext,
+      serviceWorkerSupported,
+      pushManagerSupported,
+      notificationSupported
+    }
+  }
+  return {
+    supported: true,
+    reason: 'ready',
+    message: '',
+    secureContext,
+    serviceWorkerSupported,
+    pushManagerSupported,
+    notificationSupported
+  }
+}
+
+function normalizeCapabilityPermission(value, fallback = 'ask') {
+  const normalized = String(value || '').trim().toLowerCase()
+  if (normalized === 'prompt' || normalized === 'default') return 'ask'
+  if (normalized === 'granted' || normalized === 'denied' || normalized === 'ask' || normalized === 'unsupported') {
+    return normalized
+  }
+  return fallback
+}
+
+function parsePushIntentFromUrl(rawUrl) {
+  const url = String(rawUrl || '').trim()
+  if (!url || typeof window === 'undefined') return null
+  try {
+    const parsed = new URL(url, window.location.origin)
+    const params = parsed.searchParams
+    const conversationId = String(params.get('conversation') || '').trim()
+    if (conversationId) {
+      return {
+        kind: 'conversation',
+        conversationId
+      }
+    }
+    const postId = String(params.get('post') || '').trim()
+    if (postId) {
+      return {
+        kind: 'post',
+        postId,
+        openComments: ['1', 'true', 'yes'].includes(String(params.get('comments') || '').trim().toLowerCase())
+      }
+    }
+    const username = String(params.get('profile') || '').trim()
+    if (username) {
+      return {
+        kind: 'profile',
+        username
+      }
+    }
+    const settingsSection = String(params.get('settings') || '').trim()
+    if (settingsSection) {
+      return {
+        kind: 'settings',
+        settingsSection
+      }
+    }
+  } catch (_err) {
+    return null
+  }
+  return null
+}
+
+function normalizePushOpenIntent(value) {
+  if (!value) return null
+  if (typeof value === 'string') {
+    const trimmed = value.trim()
+    if (!trimmed) return null
+    try {
+      return normalizePushOpenIntent(JSON.parse(trimmed))
+    } catch (_err) {
+      return {
+        kind: 'conversation',
+        conversationId: trimmed
+      }
+    }
+  }
+  if (typeof value !== 'object') return null
+
+  const conversationId = String(value.conversationId || '').trim()
+  if (conversationId) {
+    return {
+      kind: 'conversation',
+      conversationId,
+      messageId: String(value.messageId || '').trim()
+    }
+  }
+
+  const postId = String(value.postId || '').trim()
+  if (postId) {
+    return {
+      kind: 'post',
+      postId,
+      openComments: value.openComments === true
+    }
+  }
+
+  const username = String(value.username || '').trim()
+  if (username) {
+    return {
+      kind: 'profile',
+      username
+    }
+  }
+
+  const settingsSection = String(value.settingsSection || '').trim()
+  if (settingsSection) {
+    return {
+      kind: 'settings',
+      settingsSection
+    }
+  }
+
+  if (typeof value.url === 'string') {
+    return parsePushIntentFromUrl(value.url)
+  }
+
+  return null
+}
+
 function getPushErrorFeedback(err) {
   const rawMessage = err && typeof err.message === 'string' ? err.message.trim() : ''
   const lower = rawMessage.toLowerCase()
@@ -1774,6 +1954,36 @@ function getPushErrorFeedback(err) {
   return {
     supported: true,
     message: rawMessage || 'Не удалось настроить уведомления.'
+  }
+}
+
+function getPushSetupFeedback(err) {
+  const rawMessage = err && typeof err.message === 'string' ? err.message.trim() : ''
+  const lower = rawMessage.toLowerCase()
+  const baseFeedback = getPushErrorFeedback(err)
+  if (baseFeedback && baseFeedback.reason) return baseFeedback
+  if (lower.includes('certificate') || lower.includes('https')) {
+    return {
+      ...baseFeedback,
+      reason: 'insecure-context'
+    }
+  }
+  if (lower.includes('service worker')) {
+    return {
+      ...baseFeedback,
+      reason: 'service-worker-registration'
+    }
+  }
+  if (lower.includes('web push') && lower.includes('server')) {
+    return {
+      ...baseFeedback,
+      reason: 'server-config'
+    }
+  }
+  return {
+    ...baseFeedback,
+    reason: rawMessage ? 'runtime-error' : 'unknown',
+    message: baseFeedback && baseFeedback.message ? baseFeedback.message : 'Unable to configure notifications.'
   }
 }
 
@@ -2417,14 +2627,37 @@ export default function App() {
   const [verificationSubmitting, setVerificationSubmitting] = useState(false)
   const [lightboxImage, setLightboxImage] = useState('')
   const [miniProfileCard, setMiniProfileCard] = useState(INITIAL_MINI_PROFILE_CARD_STATE)
+  const initialPushSupport = getPushSupportSnapshot()
   const [pushState, setPushState] = useState({
-    supported: false,
-    permission: 'default',
+    supported: initialPushSupport.supported,
+    permission: initialPushSupport.notificationSupported && typeof Notification !== 'undefined'
+      ? Notification.permission
+      : 'unsupported',
     enabled: false,
     loading: false,
-    error: ''
+    error: initialPushSupport.message,
+    reason: initialPushSupport.reason
   })
-  const [pendingPushConversationId, setPendingPushConversationId] = useState(null)
+  const [pendingPushIntent, setPendingPushIntent] = useState(null)
+  const [targetedPostId, setTargetedPostId] = useState('')
+  const [installPromptState, setInstallPromptState] = useState({
+    available: false,
+    installed: typeof window !== 'undefined' && (
+      window.matchMedia('(display-mode: standalone)').matches ||
+      window.navigator.standalone === true
+    ),
+    loading: false
+  })
+  const [secureCapabilityState, setSecureCapabilityState] = useState({
+    secureContext: typeof window !== 'undefined' && window.isSecureContext === true,
+    notifications: initialPushSupport.notificationSupported && typeof Notification !== 'undefined'
+      ? normalizeCapabilityPermission(Notification.permission)
+      : 'unsupported',
+    microphone: 'ask',
+    camera: 'ask',
+    share: typeof navigator !== 'undefined' && typeof navigator.share === 'function',
+    clipboard: typeof navigator !== 'undefined' && Boolean(navigator.clipboard && typeof navigator.clipboard.writeText === 'function')
+  })
 
   const socketRef = useRef(null)
   const pcRef = useRef(null)
@@ -2457,6 +2690,7 @@ export default function App() {
   const lastNotificationSoundRef = useRef(0)
   const serviceWorkerRegistrationRef = useRef(null)
   const pushPublicKeyRef = useRef('')
+  const installPromptRef = useRef(null)
   const lastPresenceStateRef = useRef({ focused: null, activeConversationId: null })
   const typingStateRef = useRef({ conversationId: null, isTyping: false, timer: null })
   const draftsRef = useRef(draftsByConversation)
@@ -5412,12 +5646,390 @@ export default function App() {
 
   const handlePushConversationIntent = (conversationId) => {
     if (!conversationId || typeof conversationId !== 'string') return
-    setPendingPushConversationId(conversationId)
+    handlePushOpenIntentAction({ conversationId })
+  }
+
+  const isAppInstalledAction = () => (
+    typeof window !== 'undefined' && (
+      window.matchMedia('(display-mode: standalone)').matches ||
+      window.navigator.standalone === true
+    )
+  )
+
+  const syncSecureCapabilitiesAction = async () => {
+    const nextState = {
+      secureContext: typeof window !== 'undefined' && window.isSecureContext === true,
+      notifications: typeof Notification !== 'undefined'
+        ? normalizeCapabilityPermission(Notification.permission)
+        : 'unsupported',
+      microphone: 'unsupported',
+      camera: 'unsupported',
+      share: typeof navigator !== 'undefined' && typeof navigator.share === 'function',
+      clipboard: typeof navigator !== 'undefined' && Boolean(navigator.clipboard && typeof navigator.clipboard.writeText === 'function')
+    }
+    if (typeof navigator !== 'undefined' && navigator.permissions && typeof navigator.permissions.query === 'function') {
+      const permissionQueries = await Promise.all([
+        navigator.permissions.query({ name: 'microphone' }).then((result) => ({ key: 'microphone', state: result.state })).catch(() => ({ key: 'microphone', state: 'unsupported' })),
+        navigator.permissions.query({ name: 'camera' }).then((result) => ({ key: 'camera', state: result.state })).catch(() => ({ key: 'camera', state: 'unsupported' }))
+      ])
+      permissionQueries.forEach((item) => {
+        nextState[item.key] = normalizeCapabilityPermission(item.state, item.state === 'unsupported' ? 'unsupported' : 'ask')
+      })
+    } else {
+      nextState.microphone = 'ask'
+      nextState.camera = 'ask'
+    }
+    setSecureCapabilityState(nextState)
+    setInstallPromptState((prev) => ({
+      ...prev,
+      installed: isAppInstalledAction(),
+      available: Boolean(installPromptRef.current)
+    }))
+  }
+
+  const persistPushIntentAction = (intent) => {
     try {
-      localStorage.setItem(PUSH_OPEN_STORAGE_KEY, conversationId)
-    } catch (err) {
+      if (!intent) {
+        localStorage.removeItem(PUSH_OPEN_STORAGE_KEY)
+        localStorage.removeItem(LEGACY_PUSH_OPEN_STORAGE_KEY)
+        return
+      }
+      localStorage.setItem(PUSH_OPEN_STORAGE_KEY, JSON.stringify(intent))
+      if (intent.kind === 'conversation' && intent.conversationId) {
+        localStorage.setItem(LEGACY_PUSH_OPEN_STORAGE_KEY, intent.conversationId)
+      } else {
+        localStorage.removeItem(LEGACY_PUSH_OPEN_STORAGE_KEY)
+      }
+    } catch (_err) {
       // ignore storage errors
     }
+  }
+
+  const clearPersistedPushIntentAction = () => {
+    persistPushIntentAction(null)
+  }
+
+  const handlePushOpenIntentAction = (rawIntent) => {
+    const intent = normalizePushOpenIntent(rawIntent)
+    if (!intent) return
+    setPendingPushIntent(intent)
+    persistPushIntentAction(intent)
+  }
+
+  const ensureServiceWorkerRegistrationAction = async () => {
+    const support = getPushSupportSnapshot()
+    if (!support.supported) {
+      const error = new Error(support.message || 'Push notifications are unavailable in this browser.')
+      error.reason = support.reason
+      throw error
+    }
+    return ensureServiceWorkerRegistration()
+  }
+
+  const fetchPushPublicKeyAction = async () => {
+    const data = await getPushPublicKey()
+    if (!data || !data.publicKey) {
+      const error = new Error('Web Push is not configured on the server.')
+      error.reason = 'server-config'
+      throw error
+    }
+    return data.publicKey
+  }
+
+  const attachPushSubscriptionToUserAction = async () => {
+    const registration = await ensureServiceWorkerRegistrationAction()
+    const publicKey = await fetchPushPublicKeyAction()
+    let subscription = await registration.pushManager.getSubscription()
+    if (!subscription) {
+      subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(publicKey)
+      })
+    }
+    await savePushSubscription(subscription.toJSON())
+    setPushState({
+      supported: true,
+      permission: Notification.permission,
+      enabled: true,
+      loading: false,
+      error: '',
+      reason: 'enabled'
+    })
+    return subscription
+  }
+
+  const syncPushStateAction = async ({ keepError = false } = {}) => {
+    const support = getPushSupportSnapshot()
+    if (!support.supported) {
+      setPushState({
+        supported: false,
+        permission: 'unsupported',
+        enabled: false,
+        loading: false,
+        error: support.message,
+        reason: support.reason
+      })
+      return
+    }
+
+    const permission = Notification.permission
+    if (!user || permission !== 'granted') {
+      setPushState((prev) => ({
+        supported: true,
+        permission,
+        enabled: false,
+        loading: false,
+        error: keepError ? prev.error : (permission === 'denied' ? 'Notification permission is blocked in browser settings.' : ''),
+        reason: permission === 'denied' ? 'permission-denied' : 'ready'
+      }))
+      return
+    }
+
+    try {
+      const registration = await ensureServiceWorkerRegistrationAction()
+      const subscription = await registration.pushManager.getSubscription()
+      if (subscription) {
+        await savePushSubscription(subscription.toJSON())
+      }
+      setPushState((prev) => ({
+        supported: true,
+        permission,
+        enabled: Boolean(subscription),
+        loading: false,
+        error: keepError && !subscription ? prev.error : '',
+        reason: subscription ? 'enabled' : 'ready'
+      }))
+    } catch (err) {
+      const feedback = getPushSetupFeedback(err)
+      setPushState((prev) => ({
+        supported: feedback.supported,
+        permission,
+        enabled: false,
+        loading: false,
+        error: feedback.message || (keepError ? prev.error : 'Unable to configure push.'),
+        reason: feedback.reason || prev.reason
+      }))
+    }
+  }
+
+  const copyTextToClipboardAction = async (value) => {
+    if (typeof navigator === 'undefined' || !navigator.clipboard || typeof navigator.clipboard.writeText !== 'function') {
+      return false
+    }
+    await navigator.clipboard.writeText(value)
+    return true
+  }
+
+  const shareOrCopyUrlAction = async ({ title, text, url, copiedMessage = 'Link copied.', shareSuccessMessage = 'Link shared.' }) => {
+    const targetUrl = typeof window !== 'undefined'
+      ? new URL(String(url || '/'), window.location.origin).toString()
+      : String(url || '/')
+    if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+      try {
+        await navigator.share({ title, text, url: targetUrl })
+        setStatus({ type: 'success', message: shareSuccessMessage })
+        return true
+      } catch (err) {
+        if (!(err && err.name === 'AbortError')) {
+          const copied = await copyTextToClipboardAction(targetUrl).catch(() => false)
+          if (copied) {
+            setStatus({ type: 'success', message: copiedMessage })
+            return true
+          }
+        }
+        return false
+      }
+    }
+    const copied = await copyTextToClipboardAction(targetUrl).catch(() => false)
+    if (copied) {
+      setStatus({ type: 'success', message: copiedMessage })
+      return true
+    }
+    setStatus({ type: 'info', message: targetUrl })
+    return false
+  }
+
+  const enablePushNotificationsAction = async () => {
+    if (!user) {
+      setStatus({ type: 'info', message: 'Sign in first to enable notifications.' })
+      return
+    }
+    setPushState((prev) => ({ ...prev, loading: true, error: '' }))
+    try {
+      const support = getPushSupportSnapshot()
+      if (!support.supported) {
+        const error = new Error(support.message || 'Push notifications are not supported in this browser.')
+        error.reason = support.reason
+        throw error
+      }
+      await ensureServiceWorkerRegistrationAction()
+      let permission = Notification.permission
+      if (permission !== 'granted') {
+        permission = await Notification.requestPermission()
+      }
+      if (permission !== 'granted') {
+        setPushState({
+          supported: true,
+          permission,
+          enabled: false,
+          loading: false,
+          error: permission === 'denied' ? 'Notification permission is blocked in browser settings.' : '',
+          reason: permission === 'denied' ? 'permission-denied' : 'ready'
+        })
+        return
+      }
+      await attachPushSubscriptionToUserAction()
+      pushToast({
+        title: 'Notifications enabled',
+        message: 'This browser is ready to receive KTK Messenger alerts.',
+        type: 'info'
+      })
+      syncSecureCapabilitiesAction().catch(() => {})
+    } catch (err) {
+      const feedback = getPushSetupFeedback(err)
+      setPushState((prev) => ({
+        ...prev,
+        supported: feedback.supported,
+        loading: false,
+        enabled: false,
+        error: feedback.message || 'Unable to enable notifications.',
+        reason: feedback.reason || prev.reason
+      }))
+    }
+  }
+
+  const disablePushNotificationsAction = async ({ silent = false } = {}) => {
+    setPushState((prev) => ({ ...prev, loading: true, error: '' }))
+    try {
+      const support = getPushSupportSnapshot()
+      if (!support.supported) {
+        setPushState({
+          supported: false,
+          permission: 'unsupported',
+          enabled: false,
+          loading: false,
+          error: support.message,
+          reason: support.reason
+        })
+        return
+      }
+      const registration = serviceWorkerRegistrationRef.current ||
+        await navigator.serviceWorker.getRegistration('/sw.js') ||
+        await navigator.serviceWorker.getRegistration()
+      if (!registration) {
+        setPushState({
+          supported: true,
+          permission: Notification.permission,
+          enabled: false,
+          loading: false,
+          error: '',
+          reason: 'ready'
+        })
+        return
+      }
+      const subscription = await registration.pushManager.getSubscription()
+      if (subscription) {
+        if (subscription.endpoint) {
+          await deletePushSubscription(subscription.endpoint).catch(() => {})
+        }
+        await subscription.unsubscribe().catch(() => {})
+      }
+      setPushState({
+        supported: true,
+        permission: Notification.permission,
+        enabled: false,
+        loading: false,
+        error: '',
+        reason: 'ready'
+      })
+      if (!silent) {
+        pushToast({
+          title: 'Notifications disabled',
+          message: 'System notifications are now off for this browser.',
+          type: 'info'
+        })
+      }
+      syncSecureCapabilitiesAction().catch(() => {})
+    } catch (err) {
+      const feedback = getPushSetupFeedback(err)
+      setPushState((prev) => ({
+        ...prev,
+        supported: feedback.supported,
+        loading: false,
+        error: feedback.message || 'Failed to disable notifications.',
+        reason: feedback.reason || prev.reason
+      }))
+      if (!silent && feedback.supported) {
+        setStatus({ type: 'error', message: feedback.message || 'Failed to disable notifications.' })
+      }
+    }
+  }
+
+  const handlePushToggleAction = () => {
+    if (!user) {
+      setStatus({ type: 'info', message: 'Sign in first to manage notifications.' })
+      return
+    }
+    if (!pushState.supported) {
+      setStatus({ type: 'info', message: pushState.error || 'Push is unavailable in this browser.' })
+      return
+    }
+    if (pushState.enabled) {
+      disablePushNotificationsAction()
+      return
+    }
+    if (pushState.permission === 'denied') {
+      setStatus({ type: 'info', message: 'Allow notifications for this site in browser settings, then refresh the page.' })
+      return
+    }
+    enablePushNotificationsAction()
+  }
+
+  const handlePushConversationIntentAction = (conversationId) => {
+    if (!conversationId || typeof conversationId !== 'string') return
+    handlePushOpenIntentAction({ conversationId })
+  }
+
+  const handleInstallAppAction = async () => {
+    if (!installPromptRef.current) {
+      setStatus({ type: 'info', message: installPromptState.installed ? 'The app is already installed.' : 'Install prompt is not available on this browser yet.' })
+      return
+    }
+    setInstallPromptState((prev) => ({ ...prev, loading: true }))
+    try {
+      await installPromptRef.current.prompt()
+      await installPromptRef.current.userChoice.catch(() => null)
+    } finally {
+      installPromptRef.current = null
+      setInstallPromptState({
+        available: false,
+        installed: isAppInstalledAction(),
+        loading: false
+      })
+      syncSecureCapabilitiesAction().catch(() => {})
+    }
+  }
+
+  const handleShareProfileAction = async () => {
+    if (!profileView || !profileView.username) return
+    await shareOrCopyUrlAction({
+      title: `${profileView.displayName || profileView.username} on KTK Messenger`,
+      text: `Profile @${profileView.username}`,
+      url: `/?profile=${encodeURIComponent(profileView.username)}`,
+      copiedMessage: 'Profile link copied.',
+      shareSuccessMessage: 'Profile link shared.'
+    })
+  }
+
+  const handleSharePostAction = async (post) => {
+    if (!post || !post.id) return
+    await shareOrCopyUrlAction({
+      title: `${post.author && (post.author.displayName || post.author.username) ? (post.author.displayName || post.author.username) : 'KTK Messenger'} post`,
+      text: getFeedPostPreview(post, 'Post from KTK Messenger'),
+      url: `/?post=${encodeURIComponent(post.id)}`,
+      copiedMessage: 'Post link copied.',
+      shareSuccessMessage: 'Post link shared.'
+    })
   }
 
   const emitPresenceState = () => {
@@ -5589,13 +6201,15 @@ export default function App() {
   }, [view])
 
   useEffect(() => {
-    if (!isPushSupported()) {
+    const pushSupport = getPushSupportSnapshot()
+    if (!pushSupport.supported) {
       setPushState({
         supported: false,
         permission: 'unsupported',
         enabled: false,
         loading: false,
-        error: ''
+        error: pushSupport.message,
+        reason: pushSupport.reason
       })
       return
     }
@@ -5603,22 +6217,56 @@ export default function App() {
     setPushState((prev) => ({
       ...prev,
       supported: true,
-      permission: Notification.permission
+      permission: Notification.permission,
+      reason: prev.enabled ? 'enabled' : 'ready'
     }))
+
+    syncSecureCapabilitiesAction().catch(() => {})
+
+    const handleBeforeInstallPrompt = (event) => {
+      event.preventDefault()
+      installPromptRef.current = event
+      setInstallPromptState((prev) => ({
+        ...prev,
+        available: true,
+        installed: isAppInstalledAction()
+      }))
+    }
+
+    const handleAppInstalled = () => {
+      installPromptRef.current = null
+      setInstallPromptState({
+        available: false,
+        installed: true,
+        loading: false
+      })
+      syncSecureCapabilitiesAction().catch(() => {})
+    }
 
     try {
       const params = new URLSearchParams(window.location.search)
-      const fromUrl = params.get('conversation')
+      const fromUrl = normalizePushOpenIntent({
+        conversationId: params.get('conversation'),
+        postId: params.get('post'),
+        username: params.get('profile'),
+        settingsSection: params.get('settings'),
+        openComments: ['1', 'true', 'yes'].includes(String(params.get('comments') || '').trim().toLowerCase())
+      })
       if (fromUrl) {
-        handlePushConversationIntent(fromUrl)
-        params.delete('conversation')
+        handlePushOpenIntentAction(fromUrl)
+        ;['conversation', 'post', 'profile', 'settings', 'comments'].forEach((key) => params.delete(key))
         const query = params.toString()
         const nextUrl = `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash || ''}`
         window.history.replaceState({}, '', nextUrl)
       } else {
         const stored = localStorage.getItem(PUSH_OPEN_STORAGE_KEY)
         if (stored) {
-          handlePushConversationIntent(stored)
+          handlePushOpenIntentAction(stored)
+        } else {
+          const legacyConversationId = localStorage.getItem(LEGACY_PUSH_OPEN_STORAGE_KEY)
+          if (legacyConversationId) {
+            handlePushOpenIntentAction({ conversationId: legacyConversationId })
+          }
         }
       }
     } catch (err) {
@@ -5628,35 +6276,84 @@ export default function App() {
     const handleServiceWorkerMessage = (event) => {
       const payload = event && event.data ? event.data : null
       if (!payload || payload.type !== 'push-open') return
-      if (payload.conversationId) {
-        handlePushConversationIntent(payload.conversationId)
-      }
+      handlePushOpenIntentAction(payload)
     }
 
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
+    window.addEventListener('appinstalled', handleAppInstalled)
     navigator.serviceWorker.addEventListener('message', handleServiceWorkerMessage)
     return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
+      window.removeEventListener('appinstalled', handleAppInstalled)
       navigator.serviceWorker.removeEventListener('message', handleServiceWorkerMessage)
     }
   }, [])
 
   useEffect(() => {
-    syncPushState().catch(() => {})
+    syncPushStateAction().catch(() => {})
+    syncSecureCapabilitiesAction().catch(() => {})
   }, [user])
 
   useEffect(() => {
-    if (!pendingPushConversationId || conversations.length === 0) return
-    const targetConversation = conversations.find((item) => item.id === pendingPushConversationId)
-    if (!targetConversation) return
-    setActiveConversation(targetConversation)
-    setChatMobilePane('chat')
-    setView('chats')
-    setPendingPushConversationId(null)
-    try {
-      localStorage.removeItem(PUSH_OPEN_STORAGE_KEY)
-    } catch (err) {
-      // ignore storage errors
+    if (!pendingPushIntent) return
+    if (pendingPushIntent.kind === 'conversation') {
+      if (conversations.length === 0) return
+      const targetConversation = conversations.find((item) => item.id === pendingPushIntent.conversationId)
+      if (!targetConversation) return
+      setActiveConversation(targetConversation)
+      setChatMobilePane('chat')
+      setView('chats')
+      setPendingPushIntent(null)
+      clearPersistedPushIntentAction()
+      return
     }
-  }, [pendingPushConversationId, conversations])
+    if (pendingPushIntent.kind === 'profile') {
+      const username = String(pendingPushIntent.username || '').trim()
+      if (!username) {
+        setPendingPushIntent(null)
+        clearPersistedPushIntentAction()
+        return
+      }
+      setPendingPushIntent(null)
+      clearPersistedPushIntentAction()
+      openProfile(username)
+      return
+    }
+    if (pendingPushIntent.kind === 'settings') {
+      setView('settings')
+      openSettingsSectionView(pendingPushIntent.settingsSection || 'security')
+      setPendingPushIntent(null)
+      clearPersistedPushIntentAction()
+      return
+    }
+    if (pendingPushIntent.kind === 'post') {
+      resetFeedFilters()
+      setView('feed')
+      setTargetedPostId(pendingPushIntent.postId || '')
+      if (pendingPushIntent.openComments && pendingPushIntent.postId) {
+        handleToggleComments(pendingPushIntent.postId).catch(() => {})
+      }
+      setPendingPushIntent(null)
+      clearPersistedPushIntentAction()
+    }
+  }, [pendingPushIntent, conversations])
+
+  useEffect(() => {
+    if (!targetedPostId || typeof document === 'undefined') return undefined
+    const scrollTimer = window.setTimeout(() => {
+      const target = document.querySelector(`[data-post-id="${targetedPostId}"]`)
+      if (target && typeof target.scrollIntoView === 'function') {
+        target.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }
+    }, 180)
+    const clearTimer = window.setTimeout(() => {
+      setTargetedPostId('')
+    }, 6000)
+    return () => {
+      window.clearTimeout(scrollTimer)
+      window.clearTimeout(clearTimer)
+    }
+  }, [targetedPostId, view, posts, profilePosts, openComments])
 
   useEffect(() => {
     if (!user) return
@@ -8817,7 +9514,7 @@ export default function App() {
       return
     }
     if (actionId === 'push') {
-      syncPushState({ keepError: true }).catch(() => {})
+      syncPushStateAction({ keepError: true }).catch(() => {})
       return
     }
     if (actionId === 'bookmarks') {
@@ -9049,7 +9746,7 @@ export default function App() {
       return
     }
     if (value === 'push') {
-      syncPushState({ keepError: true }).catch(() => {})
+      syncPushStateAction({ keepError: true }).catch(() => {})
       setDashboardCommandInput('')
       return
     }
@@ -9183,7 +9880,7 @@ export default function App() {
         title: pushState.enabled ? 'Отключить push' : 'Включить push',
         hint: pushState.permission === 'denied' ? 'Разрешите уведомления в браузере' : 'Управление уведомлениями',
         keywords: 'push notifications уведомления',
-        run: () => handlePushToggle()
+        run: () => handlePushToggleAction()
       })
     }
     if (user && user.isAdmin) {
@@ -11045,17 +11742,95 @@ export default function App() {
     : socketConnection === 'disconnected'
       ? 'chat-connection disconnected'
       : 'chat-connection offline'
-  const pushButtonLabel = !pushState.supported
-    ? 'Push unsupported'
-    : pushState.loading
-      ? 'Updating...'
-      : pushState.enabled
-        ? 'Notifications on'
+  const pushButtonLabel = pushState.loading
+    ? 'Updating...'
+    : pushState.enabled
+      ? 'Notifications on'
+      : !pushState.supported
+        ? 'Push unavailable'
         : pushState.permission === 'denied'
           ? 'Notifications blocked'
-          : 'Enable notifications'
+          : pushState.reason === 'server-config'
+            ? 'Server push unavailable'
+            : pushState.reason === 'feature-disabled'
+              ? 'Push disabled by build'
+              : 'Enable notifications'
   const pushButtonClass = `push-toggle ${pushState.enabled ? 'enabled' : ''}`.trim()
-  const pushButtonDisabled = !user || !pushState.supported || pushState.loading
+  const pushButtonDisabled = !user || pushState.loading
+  const pushStatusBadgeLabel = pushState.enabled
+    ? 'Enabled'
+    : !pushState.supported
+      ? 'Unavailable'
+      : pushState.permission === 'denied'
+        ? 'Blocked'
+        : 'Off'
+  const installButtonLabel = installPromptState.loading
+    ? 'Preparing...'
+    : installPromptState.installed
+      ? 'App installed'
+      : installPromptState.available
+        ? 'Install app'
+        : 'Install unavailable'
+  const secureCapabilityCards = useMemo(() => ([
+    {
+      id: 'secure-context',
+      label: 'HTTPS',
+      value: secureCapabilityState.secureContext ? 'granted' : 'denied',
+      description: secureCapabilityState.secureContext ? 'Secure context is active.' : 'Browser is not running in a secure context.'
+    },
+    {
+      id: 'notifications',
+      label: 'Notifications',
+      value: pushState.enabled ? 'granted' : normalizeCapabilityPermission(pushState.permission, pushState.supported ? 'ask' : 'unsupported'),
+      description: pushState.error || (pushState.enabled ? 'Push subscription is connected.' : 'Browser notification permission state.')
+    },
+    {
+      id: 'microphone',
+      label: 'Microphone',
+      value: secureCapabilityState.microphone,
+      description: 'Permission status for voice features.'
+    },
+    {
+      id: 'camera',
+      label: 'Camera',
+      value: secureCapabilityState.camera,
+      description: 'Permission status for video features.'
+    },
+    {
+      id: 'share',
+      label: 'Native share',
+      value: secureCapabilityState.share ? 'granted' : 'unsupported',
+      description: secureCapabilityState.share ? 'Web Share API is available.' : 'Sharing will fall back to copy link.'
+    },
+    {
+      id: 'clipboard',
+      label: 'Clipboard',
+      value: secureCapabilityState.clipboard ? 'granted' : 'unsupported',
+      description: secureCapabilityState.clipboard ? 'Clipboard write access is available.' : 'Browser clipboard API is unavailable.'
+    },
+    {
+      id: 'install',
+      label: 'Install app',
+      value: installPromptState.installed ? 'granted' : installPromptState.available ? 'ask' : 'unsupported',
+      description: installPromptState.installed
+        ? 'App is already installed on this device.'
+        : installPromptState.available
+          ? 'This browser can install KTK Messenger as an app.'
+          : 'Install prompt is not available yet on this browser.'
+    }
+  ]), [
+    installPromptState.available,
+    installPromptState.installed,
+    pushState.enabled,
+    pushState.error,
+    pushState.permission,
+    pushState.supported,
+    secureCapabilityState.camera,
+    secureCapabilityState.clipboard,
+    secureCapabilityState.microphone,
+    secureCapabilityState.secureContext,
+    secureCapabilityState.share
+  ])
   const canSubscribeProfile = Boolean(user && profileView && user.id !== profileView.id)
   const profileMessagingBlocked = Boolean(
     user &&
@@ -11852,13 +12627,27 @@ export default function App() {
             <button
               type="button"
               className={pushButtonClass}
-              onClick={handlePushToggle}
+                onClick={handlePushToggleAction}
               disabled={pushButtonDisabled}
               title={pushState.permission === 'denied'
                 ? uiText('Разрешите уведомления в настройках браузера', 'Allow notifications in browser settings')
                 : uiText('Управление уведомлениями', 'Manage notifications')}
             >
               {pushButtonLabel}
+            </button>
+            <button
+              type="button"
+              className="command-toggle install-app-btn"
+              onClick={handleInstallAppAction}
+              disabled={installPromptState.loading}
+              title={installPromptState.installed
+                ? 'App already installed'
+                : installPromptState.available
+                  ? 'Install KTK Messenger'
+                  : 'Install prompt will appear when the browser marks the app installable'}
+            >
+              <span>+</span>
+              {installButtonLabel}
             </button>
             {user ? (
               <button
@@ -12756,7 +13545,7 @@ export default function App() {
                     </article>
                   </div>
                   <div className="dashboard-shortcut-row">
-                    <button type="button" className="ghost" onClick={() => syncPushState({ keepError: true }).catch(() => {})}>
+                  <button type="button" className="ghost" onClick={() => syncPushStateAction({ keepError: true }).catch(() => {})}>
                       Синхронизировать push
                     </button>
                     <button type="button" className="ghost" onClick={() => setView('feed')}>
@@ -14982,7 +15771,8 @@ export default function App() {
                 return (
                 <article
                   key={post.id}
-                  className={feedCardClasses}
+                  className={`${feedCardClasses} ${targetedPostId === post.id ? 'feed-card-targeted' : ''}`.trim()}
+                  data-post-id={post.id}
                   onContextMenu={(event) => openPostMenu(event, post)}
                   onTouchStart={(event) => handleTouchContextMenuStart(event, (menuEvent) => openPostMenu(menuEvent, post))}
                   onTouchMove={handleTouchContextMenuMove}
@@ -15051,6 +15841,9 @@ export default function App() {
                     </div>
                   )}
                   <div className="post-actions">
+                    <button type="button" onClick={() => handleSharePostAction(post)} title="Share post">
+                      ↗
+                    </button>
                     <button
                       type="button"
                       className={post.liked ? 'active' : ''}
@@ -15245,6 +16038,9 @@ export default function App() {
                     <button type="button" className="ghost" onClick={handleCopyProfileUsername}>
                       Copy @username
                     </button>
+                    <button type="button" className="ghost" onClick={handleShareProfileAction}>
+                      Share profile
+                    </button>
                   </div>
                   <div className="profile-power-ribbon">
                     <div className="profile-power-ribbon-meta">
@@ -15387,7 +16183,8 @@ export default function App() {
                   {visibleProfilePosts.map((post) => (
                     <article
                       key={post.id}
-                      className="feed-card"
+                      className={`feed-card ${targetedPostId === post.id ? 'feed-card-targeted' : ''}`.trim()}
+                      data-post-id={post.id}
                       onContextMenu={(event) => openPostMenu(event, post)}
                       onTouchStart={(event) => handleTouchContextMenuStart(event, (menuEvent) => openPostMenu(menuEvent, post))}
                       onTouchMove={handleTouchContextMenuMove}
@@ -15443,6 +16240,9 @@ export default function App() {
                         </div>
                       )}
                       <div className="post-actions">
+                        <button type="button" onClick={() => handleSharePostAction(post)} title="Share post">
+                          ↗
+                        </button>
                         <button
                           type="button"
                           className={post.liked ? 'active' : ''}
@@ -16338,7 +17138,7 @@ export default function App() {
                         <strong>Тема</strong>
                         <span>{theme === 'dark' ? 'Тёмная' : 'Светлая'}</span>
                       </button>
-                      <button type="button" className="settings-action-row" onClick={handlePushToggle} disabled={pushButtonDisabled}>
+                      <button type="button" className="settings-action-row" onClick={handlePushToggleAction} disabled={pushButtonDisabled}>
                         <strong>Push-уведомления</strong>
                         <span>{pushButtonLabel}</span>
                       </button>
@@ -16357,10 +17157,25 @@ export default function App() {
                         </span>
                       </div>
                       <div className="profile-verification-actions">
-                        <button type="button" className="primary" onClick={handlePushToggle} disabled={pushButtonDisabled}>
+                        <button type="button" className="primary" onClick={handlePushToggleAction} disabled={pushButtonDisabled}>
                           {pushButtonLabel}
                         </button>
+                        <button type="button" className="ghost" onClick={handleInstallAppAction} disabled={installPromptState.loading}>
+                          {installButtonLabel}
+                        </button>
                       </div>
+                    </section>
+                    <p className="settings-capability-copy">
+                      {pushState.error || 'Push, install prompt and secure browser APIs are available through HTTPS.'}
+                    </p>
+                    <section className="secure-capability-grid">
+                      {secureCapabilityCards.map((item) => (
+                        <article key={`secure-capability-${item.id}`} className="secure-capability-card">
+                          <span className={`secure-capability-state state-${item.value}`.trim()}>{item.value}</span>
+                          <strong>{item.label}</strong>
+                          <small>{item.description}</small>
+                        </article>
+                      ))}
                     </section>
                   </section>
                 )}
